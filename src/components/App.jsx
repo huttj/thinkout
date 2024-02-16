@@ -180,7 +180,7 @@ function Flow() {
   return (
     <div
       style={{ width: "100vw", height: "100vh" }}
-      className="wrapper"
+      className="wrapper dark:bg-gray-900"
       ref={reactFlowWrapper}
     >
       <Toaster />
@@ -207,13 +207,13 @@ function Flow() {
         selectionMode={SelectionMode.Partial}
       >
         <Panel position="top-right">
-          <button onClick={() => onLayout("TB")} className="mr-2 border border-black p-2 rounded">
+          <button onClick={() => onLayout("TB")} className="mr-2 border p-2 rounded">
             Align Vertical
           </button>
-          <button onClick={() => onLayout("LR")} className="border border-black p-2 rounded">Align Horizontal</button>
+          <button onClick={() => onLayout("LR")} className="border border p-2 rounded">Align Horizontal</button>
         </Panel>
         <Controls />
-        <MiniMap />
+        <MiniMap pannable zoomable />
 
         <Background variant="dots" gap={12} size={1} />
       </ReactFlow>

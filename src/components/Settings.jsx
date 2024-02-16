@@ -55,9 +55,9 @@ export default function Settings(props) {
           }
         }}
       >
-        <div className="bg-white dark:bg-black p-4 rounded flex flex-col w-[500px] max-w-[90vw] relative">
+        <div className="bg-white dark:bg-black p-4 rounded-lg flex flex-col w-[500px] max-w-[90vw] relative">
           <p
-            className="absolute top-0 right-0 m-2 mr-3 cursor-pointer"
+            className="absolute top-0 right-0 m-3 cursor-pointer"
             onClick={() => setOpen(false)}
           >
             ❌
@@ -69,32 +69,32 @@ export default function Settings(props) {
           <label>
             <input type="radio" checked /> OpenAI{" "}
           </label>
-          <label>
+          {/* <label>
             <input type="radio" disabled /> Claude{" "}
           </label>
           <label>
             <input type="radio" disabled /> Ollama (Local){" "}
-          </label>
+          </label> */}
 
           <input
             placeholder="API Key"
             value={key}
             onChange={(e) => setKey(e.target.value)}
-            className="border p-2 mt-4"
+            className="border p-2 mt-4 dark:bg-gray-900 rounded"
           />
 
           <textarea
             placeholder="System message"
             value={systemMessage}
             onChange={(e) => setSystemMessage(e.target.value)}
-            className="border rounded my-4 p-2 max-h-[50vh]"
+            className="border rounded my-4 p-2 max-h-[50vh] dark:bg-gray-900"
             rows="5"
           />
 
-          <p className="text-gray-800">
+          <p className="text-gray-800 dark:text-gray-400">
             <strong>Note:</strong>{" "}
             <span>
-              This key and your notes are all saved on LocalStorage, not on our
+              This key, system message, and your notes are all saved on LocalStorage, not on our
               servers. (We don't have any.)
             </span>
           </p>

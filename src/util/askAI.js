@@ -1,6 +1,14 @@
 import axios from "axios";
+import toast from "react-hot-toast";
 
 export default async function askAI(fullText) {
+  if (!localStorage.getItem("key")) {
+    toast('You have to add an OpenAI API key to get AI completions.\n\nClick the + button and the ⚙️ to open the settings.', {
+      duration: 10000,
+    });
+    throw new Error('No API key');
+  }
+
   const messages = [];
 
   const systemMessage = localStorage.getItem('systemMessage');

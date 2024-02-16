@@ -1,10 +1,12 @@
-import {useMemo} from 'react';
+import { useMemo } from "react";
 import { useReactFlow, useStoreApi, getIncomers } from "reactflow";
-import { getId } from '@/constants';
+import { getId } from "@/constants";
 
 export default function useNodeHelpers() {
   const { setNodes, setEdges, addNodes, addEdges } = useReactFlow();
+
   const store = useStoreApi();
+
   return useMemo(() => {
     function updateNode(id, params) {
       const nodes = getNodes();
@@ -19,6 +21,11 @@ export default function useNodeHelpers() {
           return node;
         })
       );
+    }
+
+    function deleteNode(id, params) {
+      const nodes = getNodes();
+      setNodes(nodes.filter((node) => node.id !== id));
     }
 
     function updateNodeData(id, data) {
@@ -222,6 +229,7 @@ export default function useNodeHelpers() {
       addNodeBelow,
       splitNode,
       spreadNode,
+      deleteNode,
       getDownstreamNodeIds,
     };
   }, [store, setNodes, setEdges, addNodes, addEdges]);

@@ -1,11 +1,9 @@
 import axios from "axios";
 
-
+// TODO: Figure out how to best enable local LLM via Ollama or others.......
 export async function POST(req) {
   
   const body = await req.json();
-
-  console.log(body);
 
   const result = await axios({
     url: 'https://api.openai.com/v1/chat/completions',
@@ -18,8 +16,6 @@ export async function POST(req) {
       messages: body.messages,
     },
   });
-
-  console.log('result', body);
   
   return Response.json(result.data.choices[0].message.content);
 }

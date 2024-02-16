@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { useReactFlow } from "reactflow";
+import { useReactFlow, useStoreApi } from "reactflow";
 import { nodeHeight, nodeWidth } from "@/constants";
 import toast from "react-hot-toast";
 import LoadTranscript from "@/components/LoadTranscript";
@@ -35,6 +35,8 @@ export default function Saved({ onLayout = () => {} }) {
   const [expanded, setExpanded] = useState(false);
   const [name, setName] = useState("");
   const [saved, setSaved] = useState(tryLoad());
+
+  const store = useStoreApi();
 
   useEffect(() => {
     function onClick(e) {
@@ -164,7 +166,7 @@ export default function Saved({ onLayout = () => {} }) {
     return (
       <div
         ref={container}
-        className="fixed top-0 left-0 dark:bg-black bg-white text-3xl p-1 px-3 pb-2 m-3 rounded leading-none cursor-pointer"
+        className="fixed top-0 left-0 dark:bg-gray-800 bg-gray-100 text-3xl p-1 px-3 pb-2 m-3 rounded leading-none cursor-pointer"
         onClick={() => setExpanded(true)}
       >
         +
@@ -174,15 +176,22 @@ export default function Saved({ onLayout = () => {} }) {
 
   return (
     <div
-      className="fixed top-0 left-0 dark:bg-black bg-white bottom-0 flex flex-col"
+      className="fixed top-0 left-0 dark:bg-gray-900 bg-gray-100 bottom-0 flex flex-col"
       ref={container}
     >
       <div className="px-4 pt-4">
         <div className="flex flex-row gap-2 justify-between items-center">
           <div className="flex gap-2">
-            <button className="border p-1 px-3" onClick={clear}>New</button>
-            <button className="border p-1 px-3" onClick={loadFromClipboard}>📋</button>
-            <LoadTranscript className="border p-1 px-3" onLoad={loadTranscript} />
+            <button className="border p-1 px-3" onClick={clear}>
+              New
+            </button>
+            <button className="border p-1 px-3" onClick={loadFromClipboard}>
+              📋
+            </button>
+            <LoadTranscript
+              className="border p-1 px-3"
+              onLoad={loadTranscript}
+            />
             <Settings className="border p-1 px-3" />
           </div>
         </div>
@@ -208,7 +217,7 @@ export default function Saved({ onLayout = () => {} }) {
       <div className="flex-1 overflow-y-auto px-4">
         {saved.map((d) => (
           <p
-            className="border rounded p-1 px-2 my-4 cursor-pointer dark:hover:bg-black dark:hover:text-white hover:bg-blue-50 hover:text-black flex flex-row justify-between gap-4"
+            className="border rounded p-1 px-2 my-4 cursor-pointer dark:hover:bg-gray-800 dark:hover:text-white hover:bg-blue-50 hover:text-black flex flex-row justify-between gap-4"
             onClick={() => load(d)}
           >
             <span>{d.name}</span>

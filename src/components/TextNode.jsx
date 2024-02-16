@@ -11,7 +11,7 @@ import getColorForUser from "@/util/getColorForUser";
 import llamaTokenizer from "llama-tokenizer-js";
 import useNodeHelpers from "@/util/useNodeHelpers";
 import * as rb from "rangeblock";
-import askAI from '@/util/askAI';
+import askAI from "@/util/askAI";
 
 import "reactflow/dist/style.css";
 
@@ -33,6 +33,7 @@ export default function TextUpdaterNode({ id, data, selected }) {
   const updateNodeInternals = useUpdateNodeInternals();
   const [textHeight, setTextHeight] = useState(height);
   const [focused, setFocused] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (textAreaRef.current) {
@@ -177,7 +178,22 @@ export default function TextUpdaterNode({ id, data, selected }) {
           background: getColorForUser(author),
         }}
       >
-        <p className="px-2 pb-2 text-xl font-bold">{author}</p>
+        <div className="flex flex-row justify-between">
+          <p className="px-2 pb-2 text-xl font-bold">{author}</p>
+          {deleting ? (
+            <div className="flex flex-row gap-4 mr-3 cursor-pointer ">
+              <div onClick={() => setDeleting(false)}>❌</div>
+              <div onClick={() => helpers.deleteNode(id)}>✅</div>
+            </div>
+          ) : (
+            <div
+              className="cursor-pointer mr-3"
+              onClick={() => setDeleting(true)}
+            >
+              🗑️
+            </div>
+          )}
+        </div>
         <div className="flex-1 flex flex-col">
           <textarea
             autoFocus
@@ -191,7 +207,7 @@ export default function TextUpdaterNode({ id, data, selected }) {
             id="text"
             name="text"
             onChange={onChange}
-            className="nodrag w-full h-full py-2 px-2 leading-6 rounded flex-1"
+            className="nodrag w-full h-full py-2 px-2 leading-6 rounded flex-1 dark:bg-gray-800"
             value={text}
             placeholder={loading ? "Loading" : "Type here"}
             disabled={loading}
@@ -201,9 +217,9 @@ export default function TextUpdaterNode({ id, data, selected }) {
           {/* <div className="flex-1 w-full h-full" style={{ display: focused ? "none" : "block", }} onClick={focus}>{text ? text.split('\n').map((line, i) => <p key={i}>{line}</p>) : <em>Empty</em>}</div> */}
         </div>
         <div className="flex flex-row justify-between gap-2 flex-0 items-center">
-          <div className="flex-1 flex flex-row gap-2">
+          <div className="flex-0 flex flex-row gap-2">
             <button
-              className="bg-transparent px-2 py-1"
+              className="bg-transparent px-2 py-1 border rounded"
               onClick={() =>
                 helpers.addNodeBelow(
                   id,
@@ -217,14 +233,18 @@ export default function TextUpdaterNode({ id, data, selected }) {
               {selection ? "Quote" : "Reply"}
             </button>
 
-            <button className="bg-transparent px-2 py-1" disabled={!text} onClick={generate}>
+            <button
+              className="bg-transparent px-2 py-1 border rounded disabled:opacity-50"
+              disabled={!text}
+              onClick={generate}
+            >
               Ask AI
             </button>
           </div>
           {/* Add to a right-click menu or select toolbar */}
           {/* <button onClick={copy}>Copy thread</button>  */}
 
-          <div className="text-sm mr-8 flex-1 text-center">
+          <div className="text-sm mr-4 flex-1 text-right">
             <span className="opacity-70">
               {text.length === 0 ? 0 : text.split(" ").length.toLocaleString()}{" "}
               words,{" "}
@@ -233,8 +253,6 @@ export default function TextUpdaterNode({ id, data, selected }) {
               {llamaTokenizer.encode(text).length.toLocaleString()} tokens
             </span>
           </div>
-
-          <div className="flex-1"/>
         </div>
       </div>
       <Handle type="source" position={sourcePosition || "bottom"} />
@@ -244,25 +262,73 @@ export default function TextUpdaterNode({ id, data, selected }) {
 
 function ResizeIcon() {
   return (
-    <div className="absolute bottom-0 right-0 p-[10px] opacity-25 hover:opacity-100">
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      strokeWidth="3"
-      stroke="black"
-      fill="none"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className="stroke-black dark:stroke-white"
-    >
-      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
-      <polyline points="16 20 20 20 20 16" />
-      <line x1="14" y1="14" x2="20" y2="20" />
-      <polyline points="8 4 4 4 4 8" />
-      <line x1="4" y1="4" x2="10" y2="10" />
-    </svg>
+    <div className="absolute bottom-0 right-0 p-[2px] opacity-25 hover:opacity-50">
+      <svg
+        width="22"
+        height="22"
+        viewBox="0 0 22 22"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+        className="stroke-black dark:stroke-white"
+      >
+        <line
+          x1="20.3707"
+          y1="5.19702"
+          x2="5.03733"
+          y2="20.5303"
+          stroke="black"
+          stroke-width="1.5"
+        />
+        <line
+          x1="20.5303"
+          y1="0.53033"
+          x2="0.53033"
+          y2="20.5303"
+          stroke="black"
+          stroke-width="1.5"
+        />
+        <line
+          x1="20.4705"
+          y1="9.70398"
+          x2="9.80379"
+          y2="20.3706"
+          stroke="black"
+          stroke-width="1.5"
+        />
+        <line
+          x1="20.5303"
+          y1="14.223"
+          x2="14.5303"
+          y2="20.223"
+          stroke="black"
+          stroke-width="1.5"
+        />
+        <line
+          x1="20.5303"
+          y1="18.71"
+          x2="19.197"
+          y2="20.0433"
+          stroke="black"
+          stroke-width="1.5"
+        />
+      </svg>
+      {/* <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width="20"
+        height="20"
+        viewBox="0 0 24 24"
+        strokeWidth="3"
+        stroke="black"
+        fill="none"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+        <polyline points="16 20 20 20 20 16" />
+        <line x1="14" y1="14" x2="20" y2="20" />
+        <polyline points="8 4 4 4 4 8" />
+        <line x1="4" y1="4" x2="10" y2="10" />
+      </svg> */}
     </div>
   );
 }
@@ -332,9 +398,9 @@ function useSelectionState(elementRef) {
         textarea.value.slice(textarea.selectionStart, textarea.selectionEnd)
       );
 
-      // measure layouts
-      let block = rb.extractSelectedBlock(window, document);
-      console.log(block);
+      // // measure layouts
+      // let block = rb.extractSelectedBlock(window, document);
+      // console.log(block);
       // console.info("Text layout: " + JSON.stringify(block.dimensions));
 
       // representation of the text range
