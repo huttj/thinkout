@@ -52,7 +52,7 @@ export default function TextUpdaterNode({ id, data, selected }) {
     }
   }, [textAreaRef, setFocused]);
 
-  window.store = useStoreApi();
+  // window.store = useStoreApi();
 
   function onChange(evt) {
     helpers.updateNodeData(id, { text: evt.target.value });
@@ -170,7 +170,7 @@ export default function TextUpdaterNode({ id, data, selected }) {
     setTextHeight(null);
   }
 
-  window.helpers = helpers;
+  // window.helpers = helpers;
 
   // TODO: Want to make new replies and new quotes, especially when triggered via keyboard, focus on the new textarea
   // useEffect(() => {

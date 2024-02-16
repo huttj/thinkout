@@ -176,7 +176,7 @@ function Flow() {
     return () => document.body.removeEventListener("keydown", onZoom);
   }, [reactFlow]);
 
-  window.reactFlow = reactFlow;
+  // window.reactFlow = reactFlow;
 
   return (
     <div
