@@ -12,7 +12,7 @@ import llamaTokenizer from "llama-tokenizer-js";
 import useNodeHelpers from "@/util/useNodeHelpers";
 import * as rb from "rangeblock";
 import askAI from "@/util/askAI";
-
+import toast from "react-hot-toast";
 import "reactflow/dist/style.css";
 
 const dagreGraph = new dagre.graphlib.Graph();
@@ -87,14 +87,27 @@ export default function TextUpdaterNode({ id, data, selected }) {
     //     ]
     //   }
     // })
-    const response = await askAI(fullText);
-    // const response = result.data['choices'][0]['message']['content'];
+    try {
+      const response = await askAI(fullText);
+      // const response = result.data['choices'][0]['message']['content'];
 
-    helpers.updateNodeData(newNode.id, {
-      loading: false,
-      text: response.trim(),
-      // text: response,
-    });
+      helpers.updateNodeData(newNode.id, {
+        loading: false,
+        text: response.trim(),
+        // text: response,
+      });
+    } catch (e) {
+      if (e.message.includes("API Key")) {
+        toast(
+          "You have to add an OpenAI API key to get AI completions.\n\nClick the + button and the ⚙️ to open the settings.",
+          {
+            duration: 10000,
+          }
+        );
+      } else {
+        toast.error(e.message);
+      }
+    }
   }
 
   function copy() {
@@ -207,7 +220,7 @@ export default function TextUpdaterNode({ id, data, selected }) {
             id="text"
             name="text"
             onChange={onChange}
-            className="nodrag w-full h-full py-2 px-2 leading-6 rounded flex-1 dark:bg-gray-800"
+            className="nodrag nowheel w-full h-full py-2 px-2 leading-6 rounded flex-1 dark:bg-gray-800"
             value={text}
             placeholder={loading ? "Loading" : "Type here"}
             disabled={loading}

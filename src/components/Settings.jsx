@@ -2,8 +2,8 @@ import React, { useState } from "react";
 import parseTranscriptWithEdges from "@/util/parseOtter";
 import toast from "react-hot-toast";
 
-function useLocalStorage(key) {
-  const [value, setValue] = useState(localStorage.getItem(key) || "");
+function useLocalStorage(key, defaultValue = "") {
+  const [value, setValue] = useState(localStorage.getItem(key) || defaultValue);
 
   function update(newValue) {
     localStorage.setItem(key, newValue);
@@ -16,16 +16,9 @@ function useLocalStorage(key) {
 export default function Settings(props) {
   const [open, setOpen] = useState(false);
   const [key, setKey] = useLocalStorage("key");
+  const [model, setModel] = useLocalStorage("model");
   const [systemMessage, setSystemMessage] = useLocalStorage("systemMessage");
-
-  function load() {
-    try {
-      props?.onLoad(parseTranscriptWithEdges(text));
-      setOpen(false);
-    } catch (e) {
-      toast.error(`Failed to parse transcript: ${e.message}`);
-    }
-  }
+  const [ai, setAi] = useLocalStorage("ai", "openai");
 
   if (!open) {
     return (
@@ -67,37 +60,67 @@ export default function Settings(props) {
 
           <p className="mb-1">LLM Selection</p>
           <label>
-            <input type="radio" checked /> OpenAI{" "}
+            <input
+              type="radio"
+              checked={ai === "openai"}
+              onChange={(e) => e.target.checked && setAi("openai")}
+            />{" "}
+            OpenAI{" "}
           </label>
           {/* <label>
             <input type="radio" disabled /> Claude{" "}
-          </label>
-          <label>
-            <input type="radio" disabled /> Ollama (Local){" "}
           </label> */}
+          <label>
+            <input
+              type="radio"
+              checked={ai === "ollama"}
+              onChange={(e) => e.target.checked && setAi("ollama")}
+            />{" "}
+            Ollama (Local)
+          </label>
 
-          <input
-            placeholder="API Key"
-            value={key}
-            onChange={(e) => setKey(e.target.value)}
-            className="border p-2 mt-4 dark:bg-gray-900 rounded"
-          />
+          {ai !== "ollama" && (
+            <div className="mt-4">
+              <label className="block mb-1">API Key</label>
+              <input
+                placeholder="API Key"
+                value={key}
+                onChange={(e) => setKey(e.target.value)}
+                className="border p-2 dark:bg-gray-900 rounded w-full"
+              />
+            </div>
+          )}
 
-          <textarea
-            placeholder="System message"
-            value={systemMessage}
-            onChange={(e) => setSystemMessage(e.target.value)}
-            className="border rounded my-4 p-2 max-h-[50vh] dark:bg-gray-900"
-            rows="5"
-          />
+          <div className="mt-4">
+            <label className="block mb-1">API Key</label>
+            <input
+              placeholder="Model name (e.g., gpt-3.5-turbo)"
+              value={model}
+              onChange={(e) => setModel(e.target.value)}
+              className="border p-2 dark:bg-gray-900 rounded w-full"
+            />
+          </div>
 
-          <p className="text-gray-800 dark:text-gray-400">
+          <div className="mt-4">
+            <label className="block mb-1">System message</label>
+            <textarea
+              placeholder="System message"
+              value={systemMessage}
+              onChange={(e) => setSystemMessage(e.target.value)}
+              className="border rounded p-2 max-h-[50vh] dark:bg-gray-900 w-full"
+              rows="5"
+            />
+          </div>
+
+          <p className="text-gray-800 dark:text-gray-400 mt-4">
             <strong>Note:</strong>{" "}
             <span>
-              This key, system message, and your notes are all saved on LocalStorage, not on our
-              servers. (We don't have any.)
+              The key, system message, and your notes are all saved in
+              LocalStorage, not on our servers. (We don't have any.)
             </span>
           </p>
+
+          <p className="text-gray-800 dark:text-gray-400 mt-4">Also, to run against Ollama, you'll have to run the following command to start it with CORS enabled: <pre className="mt-2">OLLAMA_ORIGINS=* ollama serve</pre></p>
         </div>
       </div>
     </>
