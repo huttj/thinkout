@@ -3,6 +3,7 @@ import { useReactFlow } from "reactflow";
 import { nodeHeight, nodeWidth } from "@/constants";
 import toast from "react-hot-toast";
 import LoadTranscript from "@/components/LoadTranscript";
+import Settings from "@/components/Settings";
 
 function tryLoad() {
   try {
@@ -178,15 +179,17 @@ export default function Saved({ onLayout = () => {} }) {
     >
       <div className="px-4 pt-4">
         <div className="flex flex-row gap-2 justify-between items-center">
-          <div className="flex gap-4">
-            <button onClick={clear}>New</button>
-            <button onClick={loadFromClipboard}>Load</button>
-            <LoadTranscript onLoad={loadTranscript} />
+          <div className="flex gap-2">
+            <button className="border p-1 px-3" onClick={clear}>New</button>
+            <button className="border p-1 px-3" onClick={loadFromClipboard}>📋</button>
+            <LoadTranscript className="border p-1 px-3" onLoad={loadTranscript} />
+            <Settings className="border p-1 px-3" />
           </div>
         </div>
 
         <div className="mt-4">
           <form
+            className="flex"
             onSubmit={(e) => {
               e.preventDefault();
               save();
@@ -194,18 +197,18 @@ export default function Saved({ onLayout = () => {} }) {
           >
             <input
               value={name}
-              className="p-2 mr-2 rounded"
+              className="p-2 mr-2 rounded border flex-1"
               placeholder="Save name"
               onChange={(e) => setName(e.target.value)}
             />
-            <button>Save</button>
+            <button className="border p-2 px-4">Save</button>
           </form>
         </div>
       </div>
       <div className="flex-1 overflow-y-auto px-4">
         {saved.map((d) => (
           <p
-            className="border rounded p-1 px-2 my-4 cursor-pointer dark:hover:bg-black dark:hover:text-white hover:bg-white hover:text-black flex flex-row justify-between gap-4"
+            className="border rounded p-1 px-2 my-4 cursor-pointer dark:hover:bg-black dark:hover:text-white hover:bg-blue-50 hover:text-black flex flex-row justify-between gap-4"
             onClick={() => load(d)}
           >
             <span>{d.name}</span>

@@ -157,7 +157,6 @@ function Flow() {
 
   useEffect(() => {
     function onZoom(e) {
-      console.log(`e.metaKey === ${e.metaKey} && e.key === "${e.key}"`);
       
       // Zoom in
       if (e.metaKey && e.key === "=") {

@@ -17,11 +17,16 @@ const map = {
   AI: brightColors[1],
 };
 
+function randomColor() {
+  const color = '#' + Math.floor(Math.random()*16777215).toString(16);
+  return color.length === 7 ? color : randomColor();
+}
+
 let index = 2;
 
 export default function getColorForUser(user) {
   if (!map[user]) {
-    map[user] = brightColors[index];
+    map[user] = brightColors[index] || randomColor();
     index++;
   }
 
