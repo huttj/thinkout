@@ -1,6 +1,8 @@
 import React, { useState } from "react";
 import parseTranscriptWithEdges from "@/util/parseOtter";
 import toast from "react-hot-toast";
+import { useRecoilState } from "recoil";
+import { userState } from "@/util/data";
 
 function useLocalStorage(key, defaultValue = "") {
   const [value, setValue] = useState(localStorage.getItem(key) || defaultValue);
@@ -14,6 +16,7 @@ function useLocalStorage(key, defaultValue = "") {
 }
 
 export default function Settings(props) {
+  const [user, setUser] = useRecoilState(userState);
   const [open, setOpen] = useState(false);
   const [key, setKey] = useLocalStorage("key");
   const [model, setModel] = useLocalStorage("model");
@@ -58,6 +61,18 @@ export default function Settings(props) {
 
           <h1 className="text-lg mb-4">Settings</h1>
 
+          <p className="mb-1">User settings</p>
+
+          <div className="mt-4">
+            <label className="block mb-1">Username</label>
+            <input
+              placeholder="Username"
+              value={user.name}
+              onChange={(e) => setUser({ ...user, name: e.target.value })}
+              className="border p-2 dark:bg-gray-900 rounded w-full"
+            />
+          </div>
+
           <p className="mb-1">LLM Selection</p>
           <label>
             <input
@@ -92,7 +107,7 @@ export default function Settings(props) {
           )}
 
           <div className="mt-4">
-            <label className="block mb-1">API Key</label>
+            <label className="block mb-1">Model name</label>
             <input
               placeholder="Model name (e.g., gpt-3.5-turbo)"
               value={model}
@@ -120,7 +135,11 @@ export default function Settings(props) {
             </span>
           </p>
 
-          <p className="text-gray-800 dark:text-gray-400 mt-4">Also, to run against Ollama, you'll have to run the following command to start it with CORS enabled: <pre className="mt-2">OLLAMA_ORIGINS=* ollama serve</pre></p>
+          <p className="text-gray-800 dark:text-gray-400 mt-4">
+            Also, to run against Ollama, you'll have to run the following
+            command to start it with CORS enabled:{" "}
+            <pre className="mt-2">OLLAMA_ORIGINS=* ollama serve</pre>
+          </p>
         </div>
       </div>
     </>

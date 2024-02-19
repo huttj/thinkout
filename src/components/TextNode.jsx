@@ -14,14 +14,27 @@ import * as rb from "rangeblock";
 import askAI from "@/util/askAI";
 import toast from "react-hot-toast";
 import "reactflow/dist/style.css";
+import { userState } from "@/util/data";
+import { useRecoilValue } from "recoil";
+import stringToColor from "@/util/stringToColor";
 
 const dagreGraph = new dagre.graphlib.Graph();
 dagreGraph.setDefaultEdgeLabel(() => ({}));
 
-export default function TextUpdaterNode({ id, data, selected }) {
+export default function Wrapper(props) {
+  const helpers = useNodeHelpers(props.id);
+  const node = helpers.getNode(props.id);
+  if (!node) {
+    return null;
+  }
+  return <TextUpdaterNode {...props} />;
+}
+
+function TextUpdaterNode({ id, data, selected }) {
+  const user = useRecoilValue(userState);
   const helpers = useNodeHelpers();
   const {
-    data: { text, loading, author },
+    data: { text = "", loading, author, authorId },
     width,
     height,
     targetPosition,
@@ -30,10 +43,11 @@ export default function TextUpdaterNode({ id, data, selected }) {
 
   const textAreaRef = useRef(null);
   const selection = useSelectionState(textAreaRef);
-  const updateNodeInternals = useUpdateNodeInternals();
+
   const [textHeight, setTextHeight] = useState(height);
   const [focused, setFocused] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const textChanged = useRef(false);
 
   useEffect(() => {
     if (textAreaRef.current) {
@@ -42,6 +56,12 @@ export default function TextUpdaterNode({ id, data, selected }) {
       }
       function onBlur() {
         setFocused(false);
+
+        // Todo: If text changes
+        if (textChanged.current) {
+          // helpers.updateNodeSummary(id);
+          textChanged.current = false;
+        }
       }
       textAreaRef.current.addEventListener("focus", onFocus);
       textAreaRef.current.addEventListener("blur", onBlur);
@@ -52,13 +72,57 @@ export default function TextUpdaterNode({ id, data, selected }) {
         }
       };
     }
-  }, [textAreaRef, setFocused]);
+  }, [textAreaRef, setFocused, helpers, id, textChanged]);
 
   // window.store = useStoreApi();
 
   function onChange(evt) {
+    textChanged.current = true;
     helpers.updateNodeData(id, { text: evt.target.value });
   }
+
+  // async function generate() {
+  //   const { summary, text, author } = helpers.getNode(id).data;
+
+  //   const newNode = helpers.addNodeBelow(id, "", {
+  //     loading: true,
+  //     author: `AI (${user.name})`,
+  //     authorId: user.id,
+  //   });
+
+  //   try {
+  //     const response = await askAI([
+  //       {
+  //         author: "ai",
+  //         content: summary,
+  //       },
+  //       {
+  //         author,
+  //         content: text,
+  //       },
+  //     ]);
+  //     // const response = result.data['choices'][0]['message']['content'];
+
+  //     helpers.updateNodeData(newNode.id, {
+  //       loading: false,
+  //       text: response.trim(),
+  //       // text: response,
+  //     });
+
+  //     // helpers.updateNodeSummary(newNode.id);
+  //   } catch (e) {
+  //     if (e.message.includes("API Key")) {
+  //       toast(
+  //         "You have to add an OpenAI API key to get AI completions.\n\nClick the + button and the ⚙️ to open the settings.",
+  //         {
+  //           duration: 10000,
+  //         }
+  //       );
+  //     } else {
+  //       toast.error(e.message);
+  //     }
+  //   }
+  // }
 
   async function generate() {
     const fullText = helpers.getTextToNode(id, true);
@@ -67,26 +131,10 @@ export default function TextUpdaterNode({ id, data, selected }) {
 
     const newNode = helpers.addNodeBelow(id, "", {
       loading: true,
-      author: "AI",
+      author: `AI (${user.name})`,
+      authorId: user.id,
     });
 
-    // const result = await axios({
-    //   url: 'https://api.openai.com/v1/chat/completions',
-    //   method: 'POST',
-    //   headers: {
-    //     Authorization: `Bearer <TOKEN>`,
-    //   },
-    //   data: {
-    //     "model": "gpt-3.5-turbo",
-    //     "messages": [
-    //       {
-    //         "role": "system",
-    //         "content": "You are a helpful assistant."
-    //       },
-    //       ...fullText.map(n => ({ role: n.author === 'AI' ? 'assistant' : n.author, content: n.content })),
-    //     ]
-    //   }
-    // })
     try {
       const response = await askAI(fullText);
       // const response = result.data['choices'][0]['message']['content'];
@@ -99,7 +147,7 @@ export default function TextUpdaterNode({ id, data, selected }) {
     } catch (e) {
       if (e.message.includes("API Key")) {
         toast(
-          "You have to add an OpenAI API key to get AI completions.\n\nClick the + button and the ⚙️ to open the settings.",
+          "You have to add an API key to get AI completions.\n\nClick the + button and the ⚙️ to open the settings.",
           {
             duration: 10000,
           }
@@ -115,6 +163,7 @@ export default function TextUpdaterNode({ id, data, selected }) {
   }
 
   function onKeyDown(e) {
+    let newNode = null;
     if (e.metaKey && e.keyCode == 13) {
       generate();
     } else if (e.altKey && e.shiftKey && e.keyCode === 13) {
@@ -122,30 +171,30 @@ export default function TextUpdaterNode({ id, data, selected }) {
       // TODO: Also, need to handle auto-focus when adding a new node. It should typically follow the action. For
       //       instance, it should follow the quote, reply, split, and spread. But, there might be other actions that
       //       make sense for it to go somewhere elese. Should think about that and make it intuitive.
-      helpers.spreadNode(id, textAreaRef.current.selectionStart);
+      newNode = helpers.spreadNode(id, textAreaRef.current.selectionStart);
     } else if (e.altKey && e.keyCode === 13) {
       if (selection) {
-        helpers.addNodeBelow(id, selection, {
-          author: "user",
+        newNode = helpers.addNodeBelow(id, selection, {
+          author: user.name,
+          authorId: user.id,
         });
       } else {
-        helpers.splitNode(id, textAreaRef.current.selectionStart);
+        newNode = helpers.splitNode(id, textAreaRef.current.selectionStart);
       }
     }
+    newNode && focusOnNode(newNode.id);
   }
 
   useEffect(() => {
     if (!textAreaRef.current || textHeight === null) return;
 
     const outerHeight = textAreaRef.current.offsetHeight;
-    const extraHeight = height - outerHeight;
+    const extraHeight = (height || 0) - outerHeight;
 
     const targetHeight = textAreaRef.current.scrollHeight;
 
     setTextHeight(Math.min(600, targetHeight + extraHeight));
   }, [height, text, helpers, textAreaRef]);
-
-  useEffect(() => {}, [height]);
 
   function clearSize() {
     setTextHeight(null);
@@ -167,6 +216,24 @@ export default function TextUpdaterNode({ id, data, selected }) {
     setTimeout(() => textAreaRef.current?.focus?.(), 1);
   }
 
+  function getColor() {
+    if (author.match(/^AI /)) {
+      return "grey";
+    }
+    return stringToColor(author);
+  }
+
+  function quoteOrReply() {
+    const newNode = helpers.addNodeBelow(
+      id,
+      selection ? `> ${selection}\n\n` : "",
+      {
+        authorId: user.id,
+        author: user.name,
+      }
+    );
+    focusOnNode(newNode.id);
+  }
   return (
     <>
       <NodeResizeControl
@@ -188,7 +255,7 @@ export default function TextUpdaterNode({ id, data, selected }) {
           border: selected ? "2px solid gray" : "2px solid transparent",
           minHeight: textHeight,
           minWidth: 600,
-          background: getColorForUser(author),
+          background: getColor(),
         }}
       >
         <div className="flex flex-row justify-between">
@@ -209,6 +276,7 @@ export default function TextUpdaterNode({ id, data, selected }) {
         </div>
         <div className="flex-1 flex flex-col">
           <textarea
+            id={`${id}_textarea`}
             autoFocus
             ref={textAreaRef}
             style={{
@@ -217,13 +285,14 @@ export default function TextUpdaterNode({ id, data, selected }) {
               // display: focused ? "block" : "none",
             }}
             onKeyDown={onKeyDown}
-            id="text"
             name="text"
             onChange={onChange}
-            className="nodrag nowheel w-full h-full py-2 px-2 leading-6 rounded flex-1 dark:bg-gray-800"
+            className={`nodrag w-full h-full py-2 px-2 leading-6 rounded flex-1 dark:bg-gray-800 ${
+              focused ? "nowheel" : ""
+            }`}
             value={text}
             placeholder={loading ? "Loading" : "Type here"}
-            disabled={loading}
+            disabled={loading || authorId !== user.id}
             // rows={Math.max((text.length / 80 + 2) | 0, 10)}
             // cols={80}
           />
@@ -233,15 +302,7 @@ export default function TextUpdaterNode({ id, data, selected }) {
           <div className="flex-0 flex flex-row gap-2">
             <button
               className="bg-transparent px-2 py-1 border rounded"
-              onClick={() =>
-                helpers.addNodeBelow(
-                  id,
-                  selection ? `> ${selection}\n\n` : "",
-                  {
-                    author: "user",
-                  }
-                )
-              }
+              onClick={quoteOrReply}
             >
               {selection ? "Quote" : "Reply"}
             </button>
@@ -253,6 +314,14 @@ export default function TextUpdaterNode({ id, data, selected }) {
             >
               Ask AI
             </button>
+
+            {/* <button
+              className="bg-transparent px-2 py-1 border rounded disabled:opacity-50"
+              disabled={!text || !data.summary}
+              onClick={() => toast(data.summary)}
+            >
+              Show summary
+            </button> */}
           </div>
           {/* Add to a right-click menu or select toolbar */}
           {/* <button onClick={copy}>Copy thread</button>  */}
@@ -273,6 +342,15 @@ export default function TextUpdaterNode({ id, data, selected }) {
   );
 }
 
+function focusOnNode(id) {
+  setTimeout(() => {
+    const textEl = document.getElementById(`${id}_textarea`);
+    textEl.focus();
+    textEl.selectionStart = textEl.value.length;
+    textEl.selectionEnd = textEl.value.length;
+  }, 500);
+}
+
 function ResizeIcon() {
   return (
     <div className="absolute bottom-0 right-0 p-[2px] opacity-25 hover:opacity-50">
@@ -290,7 +368,7 @@ function ResizeIcon() {
           x2="5.03733"
           y2="20.5303"
           stroke="black"
-          stroke-width="1.5"
+          strokeWidth="1.5"
         />
         <line
           x1="20.5303"
@@ -298,7 +376,7 @@ function ResizeIcon() {
           x2="0.53033"
           y2="20.5303"
           stroke="black"
-          stroke-width="1.5"
+          strokeWidth="1.5"
         />
         <line
           x1="20.4705"
@@ -306,7 +384,7 @@ function ResizeIcon() {
           x2="9.80379"
           y2="20.3706"
           stroke="black"
-          stroke-width="1.5"
+          strokeWidth="1.5"
         />
         <line
           x1="20.5303"
@@ -314,7 +392,7 @@ function ResizeIcon() {
           x2="14.5303"
           y2="20.223"
           stroke="black"
-          stroke-width="1.5"
+          strokeWidth="1.5"
         />
         <line
           x1="20.5303"
@@ -322,7 +400,7 @@ function ResizeIcon() {
           x2="19.197"
           y2="20.0433"
           stroke="black"
-          stroke-width="1.5"
+          strokeWidth="1.5"
         />
       </svg>
       {/* <svg

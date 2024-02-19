@@ -1,17 +1,16 @@
 import axios from "axios";
 
 /**
- * 
- * @param {[{ author: string, content: string }]} fullText 
- * @returns 
+ *
+ * @param {string} prompt
+ * @returns
  */
-export default async function askAI(fullText) {
-  const model = localStorage.getItem('model');
+export default async function askAI(prompt) {
+  const model = localStorage.getItem("model");
 
-  if (localStorage.getItem('ai') === 'ollama') {
-
+  if (localStorage.getItem("ai") === "ollama") {
     if (!model) {
-      throw Error('Model not specified');
+      throw Error("Model not specified");
     }
 
     const response = await axios({
@@ -20,9 +19,9 @@ export default async function askAI(fullText) {
       data: {
         // model: "mixtral",
         model,
-        prompt: fullText.map((n) => `${n.author}: ${n.content}`).join("\n***\n") + "\n***\nAI: ",
+        prompt,
         stream: false,
-        system: localStorage.getItem('systemMessage') || null,
+        // system: localStorage.getItem("systemMessage") || null,
         // system: `
         //   Keep your responses conscise and clear. Avoid overly
         //   general advice like "consult a professional" and
@@ -40,16 +39,16 @@ export default async function askAI(fullText) {
   }
 
   if (!localStorage.getItem("key")) {
-    throw new Error('No API key');
+    throw new Error("No API key");
   }
 
   const messages = [];
 
-  const systemMessage = localStorage.getItem('systemMessage');
+  const systemMessage = localStorage.getItem("systemMessage");
 
   if (systemMessage) {
     messages.push({
-      role: 'system',
+      role: "system",
       content: systemMessage,
     });
   }
@@ -58,14 +57,12 @@ export default async function askAI(fullText) {
     url: "/ai",
     method: "POST",
     data: {
-      model: model || 'gpt-3.5-turbo',
+      model: model || "gpt-3.5-turbo",
       key: localStorage.getItem("key"),
-      messages: messages.concat(
-        fullText.map((t) => ({
-          role: t.author === "AI" ? "assistant" : "user",
-          content: t.content,
-        }))
-      ),
+      messages: messages.concat({
+        role: "user",
+        content: prompt,
+      }),
     },
   });
 

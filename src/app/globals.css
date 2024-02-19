@@ -17,6 +17,8 @@
 }
 
 body {
+  height: 100dvh;
+  max-height: -webkit-fill-available;
   color: rgb(var(--foreground-rgb));
   background: linear-gradient(
       to bottom,

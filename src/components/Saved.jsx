@@ -4,14 +4,11 @@ import { nodeHeight, nodeWidth } from "@/constants";
 import toast from "react-hot-toast";
 import LoadTranscript from "@/components/LoadTranscript";
 import Settings from "@/components/Settings";
+import { docState, savedGraphs } from "@/util/data";
+import { v4 } from "uuid";
+import { useRecoilState, useRecoilValue } from "recoil";
 
-function tryLoad() {
-  try {
-    return (JSON.parse(localStorage.getItem("saved")) || []).map(stringIds);
-  } catch (e) {
-    return [];
-  }
-}
+
 
 function stringIds(entry) {
   return {
@@ -34,9 +31,8 @@ export default function Saved({ onLayout = () => {} }) {
 
   const [expanded, setExpanded] = useState(false);
   const [name, setName] = useState("");
-  const [saved, setSaved] = useState(tryLoad());
-
-  const store = useStoreApi();
+  const {id} = useRecoilValue(docState);
+  const [saved, setSaved] = useRecoilState(savedGraphs);
 
   useEffect(() => {
     function onClick(e) {
@@ -49,33 +45,19 @@ export default function Saved({ onLayout = () => {} }) {
     return () => document.body.removeEventListener("click", onClick);
   }, [container, setExpanded]);
 
-  function clear() {
-    setName("");
-    setNodes([
-      {
-        id: "1",
-        position: { x: 0, y: 0 },
-        width: nodeWidth,
-        height: nodeHeight,
-        type: "textUpdater",
-        data: { text: "", author: "user" },
-      },
-    ]);
-    setEdges([]);
-    setTimeout(() => fitView(), 1);
+  function createNew() {
+    window.location = `/${v4()}`;
   }
 
   function save() {
     const newSave = [
       {
+        id,
         name,
-        nodes: [...store.getState().nodeInternals.values()],
-        edges: store.getState().edges,
       },
-      ...saved.filter((n) => n.name !== name),
+      ...saved.filter((n) => n.id !== id),
     ];
     setSaved(newSave);
-    localStorage.setItem("saved", JSON.stringify(newSave));
 
     toast.success(
       <span>
@@ -85,26 +67,13 @@ export default function Saved({ onLayout = () => {} }) {
   }
 
   function load(data) {
-    clear();
-
-    setTimeout(() => {
-      setName(data.name);
-      setNodes(data.nodes);
-      setEdges(data.edges);
-      setTimeout(() => fitView(), 1);
-      toast.success(
-        <span>
-          Loaded <span className="font-bold"> {data.name}</span>
-        </span>
-      );
-    }, 1);
+    window.location = `/${data.id}`;
   }
 
   function remove(item) {
     if (confirm(`Really delete ${item.name}?`)) {
-      const newSave = saved.filter((n) => n.name !== item.name);
+      const newSave = saved.filter((n) => n.id !== item.id);
       setSaved(newSave);
-      localStorage.setItem("saved", JSON.stringify(newSave));
       toast(
         <span>
           Deleted <span className="font-bold"> {item.name}</span>
@@ -126,41 +95,41 @@ export default function Saved({ onLayout = () => {} }) {
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [save]);
 
-  async function loadFromClipboard() {
-    let text = "";
-    try {
-      text = await navigator.clipboard.readText();
-    } catch (error) {
-      text = document.execCommand("paste");
-    }
-    try {
-      const data = JSON.parse(text);
-      data.name = data.name || "Untitled";
+  // async function loadFromClipboard() {
+  //   let text = "";
+  //   try {
+  //     text = await navigator.clipboard.readText();
+  //   } catch (error) {
+  //     text = document.execCommand("paste");
+  //   }
+  //   try {
+  //     const data = JSON.parse(text);
+  //     data.name = data.name || "Untitled";
 
-      data.nodes = data.nodes.map((n) => ({
-        ...n,
-        position: { x: 0, y: 0 },
-        width: nodeWidth,
-        height: nodeHeight,
-        type: "textUpdater",
-      }));
+  //     data.nodes = data.nodes.map((n) => ({
+  //       ...n,
+  //       position: { x: 0, y: 0 },
+  //       width: nodeWidth,
+  //       height: nodeHeight,
+  //       type: "textUpdater",
+  //     }));
 
-      load(data);
-    } catch (e) {
-      alert(e.message);
-    }
-  }
+  //     load(data);
+  //   } catch (e) {
+  //     alert(e.message);
+  //   }
+  // }
 
-  async function loadTranscript(data) {
-    data.nodes = data.nodes.map((n) => ({
-      ...n,
-      position: { x: 0, y: 0 },
-      width: nodeWidth,
-      height: nodeHeight,
-      type: "textUpdater",
-    }));
-    load(data);
-  }
+  // async function loadTranscript(data) {
+  //   data.nodes = data.nodes.map((n) => ({
+  //     ...n,
+  //     position: { x: 0, y: 0 },
+  //     width: nodeWidth,
+  //     height: nodeHeight,
+  //     type: "textUpdater",
+  //   }));
+  //   load(data);
+  // }
 
   if (!expanded) {
     return (
@@ -182,16 +151,16 @@ export default function Saved({ onLayout = () => {} }) {
       <div className="px-4 pt-4">
         <div className="flex flex-row gap-2 justify-between items-center">
           <div className="flex gap-2">
-            <button className="border p-1 px-3" onClick={clear}>
+            <button className="border p-1 px-3" onClick={createNew}>
               New
             </button>
-            <button className="border p-1 px-3" onClick={loadFromClipboard}>
+            {/* <button className="border p-1 px-3" onClick={loadFromClipboard}>
               📋
             </button>
             <LoadTranscript
               className="border p-1 px-3"
               onLoad={loadTranscript}
-            />
+            /> */}
             <Settings className="border p-1 px-3" />
           </div>
         </div>
@@ -206,7 +175,7 @@ export default function Saved({ onLayout = () => {} }) {
           >
             <input
               value={name}
-              className="p-2 mr-2 rounded border flex-1"
+              className="p-2 mr-2 rounded border flex-1 text-black"
               placeholder="Save name"
               onChange={(e) => setName(e.target.value)}
             />
@@ -215,10 +184,11 @@ export default function Saved({ onLayout = () => {} }) {
         </div>
       </div>
       <div className="flex-1 overflow-y-auto px-4">
-        {saved.map((d) => (
+        {saved.map((d, i) => (
           <p
             className="border rounded p-1 px-2 my-4 cursor-pointer dark:hover:bg-gray-800 dark:hover:text-white hover:bg-blue-50 hover:text-black flex flex-row justify-between gap-4"
             onClick={() => load(d)}
+            key={i}
           >
             <span>{d.name}</span>
             <span

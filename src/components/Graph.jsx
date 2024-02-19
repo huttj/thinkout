@@ -20,6 +20,11 @@ import dagre from "dagre";
 import { Toaster, toast } from "react-hot-toast";
 import TextUpdaterNode from "@/components/TextNode";
 
+import useCursorStateSynced from '@/hooks/useCursorStateSynced';
+import useNodesStateSynced from '@/hooks/useNodesStateSynced';
+import useEdgesStateSynced from '@/hooks/useEdgesStateSynced';
+
+
 import "reactflow/dist/style.css";
 
 const nodeTypes = { textUpdater: TextUpdaterNode };
@@ -30,6 +35,9 @@ dagreGraph.setDefaultEdgeLabel(() => ({}));
 // import data from "./data.json";
 import Saved from "@/components/Saved";
 import { getId, defaultNode, nodeWidth, nodeHeight } from "@/constants";
+import { docState, userState } from "@/util/data";
+import { useRecoilValue } from "recoil";
+import Cursors from "./Cursors";
 
 // const initialNodes = data.nodes.map((n) => ({
 //   ...n,
@@ -97,17 +105,20 @@ const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
 );
 
 function Flow() {
+  const user = useRecoilValue(userState);
+  const [nodes, setNodes, onNodesChange, nodesMap] = useNodesStateSynced(initialNodes.map(n => ({ ...n, data: { ...n.data, authorId: user.id, author: user.name, }})));
+  const [edges, setEdges, onEdgesChange, edgesMap] = useEdgesStateSynced(initialEdges);
+  const [cursors, onMouseMove] = useCursorStateSynced();
+
   const reactFlow = useReactFlow();
   const reactFlowWrapper = useRef(null);
   const connectingNodeId = useRef(null);
 
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const { screenToFlowPosition, fitView } = useReactFlow();
   const onConnect = useCallback((params) => {
     // reset the start node on connections
     connectingNodeId.current = null;
-    setEdges((eds) => addEdge(params, eds));
+    edgesMap.add(params.id, params);
   }, []);
 
   const onConnectStart = useCallback((_, { nodeId }) => {
@@ -130,17 +141,15 @@ function Flow() {
             y: event.clientY,
           }),
           type: "textUpdater",
-          data: { label: `Node ${id}`, text: "" },
+          data: { text: "", author: user.name, authorId: user.id },
           origin: [0.5, 0.0],
         };
 
-        setNodes((nds) => nds.concat(newNode));
-        setEdges((eds) =>
-          eds.concat({ id, source: connectingNodeId.current, target: id })
-        );
+        nodesMap.set(newNode.id, newNode);
+        edgesMap.set(id, { id, source: connectingNodeId.current, target: id });
       }
     },
-    [screenToFlowPosition]
+    [screenToFlowPosition,]
   );
 
   const onLayout = useCallback(
@@ -205,6 +214,7 @@ function Flow() {
         // panOnDrag={[1, 2]}
         // selectionKeyCode={16}
         selectionMode={SelectionMode.Partial}
+        onPointerMove={onMouseMove}
       >
         <Panel position="top-right">
           <button onClick={() => onLayout("TB")} className="mr-2 border p-2 rounded">
@@ -216,6 +226,7 @@ function Flow() {
         <MiniMap pannable zoomable />
 
         <Background variant="dots" gap={12} size={1} />
+        <Cursors cursors={cursors} />
       </ReactFlow>
       <Saved />
     </div>
