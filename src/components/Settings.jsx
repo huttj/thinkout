@@ -51,7 +51,7 @@ export default function Settings(props) {
           }
         }}
       >
-        <div className="bg-white dark:bg-black p-4 rounded-lg flex flex-col w-[500px] max-w-[90vw] relative">
+        <div className="bg-white dark:bg-black p-4 rounded-lg flex flex-col w-[500px] max-w-[90vw] relative max-h-[90vh] overflow-auto">
           <p
             className="absolute top-0 right-0 m-3 cursor-pointer"
             onClick={() => setOpen(false)}
@@ -61,9 +61,7 @@ export default function Settings(props) {
 
           <h1 className="text-lg mb-4">Settings</h1>
 
-          <p className="mb-1">User settings</p>
-
-          <div className="mt-4">
+          <div className="mb-5">
             <label className="block mb-1">Username</label>
             <input
               placeholder="Username"
