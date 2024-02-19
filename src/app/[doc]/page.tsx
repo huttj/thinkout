@@ -24,7 +24,7 @@ function Loader(props: any) {
 
     const provider = new WebrtcProvider(`thinkout-${id}`, ydoc, {
       signaling: [
-        "wss://161.35.229.54",
+        "wss://ws.thinkout.app",
       ],
     });
     const persistence = new IndexeddbPersistence(id, ydoc);
