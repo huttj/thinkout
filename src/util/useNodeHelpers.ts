@@ -30,21 +30,21 @@ export default function useNodeHelpers() {
   // const store = useStoreApi();
 
   return useMemo(() => {
-    function updateNode(id, params) {
+    function updateNode(id: string, params: any) {
       const node = nodesMap.get(id);
       nodesMap.set(id, { ...node, ...params });
     }
 
-    function deleteNode(id) {
+    function deleteNode(id: string) {
       nodesMap.delete(id);
     }
 
-    function updateNodeData(id, data) {
+    function updateNodeData(id: string, data: any) {
       const node = nodesMap.get(id);
       updateNode(id, { ...node, data: { ...node?.data, ...data } });
     }
 
-    function getAllTextToNode(id, label, seenNodes = {}) {
+    function getAllTextToNode(id: string, label: boolean, seenNodes = {}) {
       const { nodes, edges } = getNodesAndEdges();
       const thisNode = nodes.find((n) => n.id === id);
 
@@ -52,6 +52,7 @@ export default function useNodeHelpers() {
 
       let incomer = thisNode;
       for (let i = 0; i < 1000; i++) {
+        // @ts-ignore
         incomers = getIncomers(incomer, nodes, edges);
 
         if (incomer) {
@@ -63,7 +64,9 @@ export default function useNodeHelpers() {
 
       const fullText = [
         label
+        // @ts-ignore
           ? { author: thisNode.data.author, content: thisNode.data.text }
+          // @ts-ignore
           : thisNode.data.text,
         ...allIncomers.map((n) =>
           label ? { author: n.data.author, content: n.data.text } : n.data.text
@@ -73,14 +76,17 @@ export default function useNodeHelpers() {
       return label ? fullText : fullText.join("\n\n");
     }
 
-    async function updateNodeSummary(id) {
+    async function updateNodeSummary(id: string) {
       const summary = await summarizeNode(id);
       updateNodeData(id, { summary });
     }
 
-    async function summarizeNode(id) {
+    async function summarizeNode(id: string) {
       const { nodes, edges } = getNodesAndEdges();
-      const thisNode = nodes.find((n) => n.id === id);
+      const thisNode = nodesMap.get(id);
+
+      if (!thisNode) return;
+
       const incomers = getIncomers(thisNode, nodes, edges);
 
       if (!incomers.length) {
@@ -117,9 +123,11 @@ export default function useNodeHelpers() {
       `);
     }
 
-    function getTextToNode(id, label) {
+    function getTextToNode(id: string, label: boolean) {
       const { nodes, edges } = getNodesAndEdges();
-      const thisNode = nodes.find((n) => n.id === id);
+      const thisNode = nodesMap.get(id);
+
+      if (!thisNode) return;
 
       const allIncomers = [];
 
@@ -157,15 +165,15 @@ export default function useNodeHelpers() {
       return nodes;
     }
 
-    function getNode(id) {
+    function getNode(id: string) {
       return nodesMap.get(id);
     }
 
-    function addNodes(node) {
+    function addNodes(node: any) {
       nodesMap.set(node.id, node);
     }
 
-    function addEdges(edge) {
+    function addEdges(edge: any) {
       edgesMap.set(edge.id, edge);
     }
 
@@ -177,6 +185,8 @@ export default function useNodeHelpers() {
     ) {
       const newNodeId = getId();
       const thisNode = nodesMap.get(Array.isArray(id) ? id[0] : id);
+
+      if (!thisNode) return;
 
       const newNode = {
         id: newNodeId,

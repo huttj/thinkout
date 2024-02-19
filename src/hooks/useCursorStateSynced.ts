@@ -31,7 +31,6 @@ export function useCursorStateSynced() {
   const { screenToFlowPosition } = useReactFlow();
 
   useEffect(() => {
-    console.log('User update', user);
     const cursor = cursorsMap.get(cursorId);
     cursorsMap.set(cursorId, { ...cursor, ...user } as any);
   }, [user, cursorsMap]);
@@ -40,6 +39,7 @@ export function useCursorStateSynced() {
   const flush = useCallback(() => {
     const now = Date.now();
 
+    // @ts-ignore
     for (const [id, cursor] of cursorsMap) {
       if (now - cursor.timestamp > MAX_IDLE_TIME) {
         cursorsMap.delete(id);
@@ -69,10 +69,12 @@ export function useCursorStateSynced() {
   useEffect(() => {
     const timer = window.setInterval(flush, MAX_IDLE_TIME);
     const observer = () => {
+      // @ts-ignore
       setCursors([...cursorsMap.values()]);
     };
 
     flush();
+    // @ts-ignore
     setCursors([...cursorsMap.values()]);
     cursorsMap.observe(observer);
 
