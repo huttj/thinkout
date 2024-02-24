@@ -14,9 +14,16 @@ import * as rb from "rangeblock";
 import askAI from "@/util/askAI";
 import toast from "react-hot-toast";
 import "reactflow/dist/style.css";
-import { userState } from "@/util/data";
+import {
+  docState,
+  searchResultsState,
+  searchState,
+  userState,
+} from "@/util/data";
 import { useRecoilValue } from "recoil";
 import stringToColor from "@/util/stringToColor";
+import promptAI from "@/util/promptAI";
+import Color from 'colorjs.io';
 
 const dagreGraph = new dagre.graphlib.Graph();
 dagreGraph.setDefaultEdgeLabel(() => ({}));
@@ -31,15 +38,24 @@ export default function Wrapper(props) {
 }
 
 function TextUpdaterNode({ id, data, selected }) {
+  const { ydoc } = useRecoilValue(docState);
+  const search = useRecoilValue(searchState);
   const user = useRecoilValue(userState);
   const helpers = useNodeHelpers();
+  const focusMap = ydoc.getMap("focus");
+  const [highlightedBy, setHighlightedBy] = useState(
+    Object.keys(focusMap.get(id) || {})
+  );
+
   const {
-    data: { text = "", loading, author, authorId },
+    data: { text = "", loading, author, authorId, color, tone, topic, purpose },
     width,
     height,
     targetPosition,
     sourcePosition,
   } = helpers.getNode(id);
+
+  const isAuthor = user.id === authorId;
 
   const textAreaRef = useRef(null);
   const selection = useSelectionState(textAreaRef);
@@ -51,6 +67,15 @@ function TextUpdaterNode({ id, data, selected }) {
 
   useEffect(() => {
     if (textAreaRef.current) {
+      function stopPropagation(e) {
+        // Is zoom and not just scroll
+        if (e.ctrlKey || e.metaKey) return;
+
+        if (focused || selected) {
+          e.stopPropagation();
+        }
+      }
+
       function onFocus() {
         setFocused(true);
       }
@@ -63,16 +88,20 @@ function TextUpdaterNode({ id, data, selected }) {
           textChanged.current = false;
         }
       }
+      textAreaRef.current.addEventListener("wheel", stopPropagation, {
+        passive: true,
+      });
       textAreaRef.current.addEventListener("focus", onFocus);
       textAreaRef.current.addEventListener("blur", onBlur);
       return () => {
         if (textAreaRef.current) {
+          textAreaRef.current.removeEventListener("wheel", stopPropagation);
           textAreaRef.current.removeEventListener("focus", onFocus);
           textAreaRef.current.removeEventListener("blur", onBlur);
         }
       };
     }
-  }, [textAreaRef, setFocused, helpers, id, textChanged]);
+  }, [textAreaRef, focused, selected, setFocused, helpers, id, textChanged]);
 
   // window.store = useStoreApi();
 
@@ -81,63 +110,17 @@ function TextUpdaterNode({ id, data, selected }) {
     helpers.updateNodeData(id, { text: evt.target.value });
   }
 
-  // async function generate() {
-  //   const { summary, text, author } = helpers.getNode(id).data;
-
-  //   const newNode = helpers.addNodeBelow(id, "", {
-  //     loading: true,
-  //     author: `AI (${user.name})`,
-  //     authorId: user.id,
-  //   });
-
-  //   try {
-  //     const response = await askAI([
-  //       {
-  //         author: "ai",
-  //         content: summary,
-  //       },
-  //       {
-  //         author,
-  //         content: text,
-  //       },
-  //     ]);
-  //     // const response = result.data['choices'][0]['message']['content'];
-
-  //     helpers.updateNodeData(newNode.id, {
-  //       loading: false,
-  //       text: response.trim(),
-  //       // text: response,
-  //     });
-
-  //     // helpers.updateNodeSummary(newNode.id);
-  //   } catch (e) {
-  //     if (e.message.includes("API Key")) {
-  //       toast(
-  //         "You have to add an OpenAI API key to get AI completions.\n\nClick the + button and the ⚙️ to open the settings.",
-  //         {
-  //           duration: 10000,
-  //         }
-  //       );
-  //     } else {
-  //       toast.error(e.message);
-  //     }
-  //   }
-  // }
-
   async function generate() {
     const fullText = helpers.getTextToNode(id, true);
 
-    console.log(fullText);
-
     const newNode = helpers.addNodeBelow(id, "", {
       loading: true,
-      author: `AI (${user.name})`,
+      author: `AI`,
       authorId: user.id,
     });
 
     try {
       const response = await askAI(fullText);
-      // const response = result.data['choices'][0]['message']['content'];
 
       helpers.updateNodeData(newNode.id, {
         loading: false,
@@ -158,13 +141,109 @@ function TextUpdaterNode({ id, data, selected }) {
     }
   }
 
+  async function generateNew() {
+    const newNode = helpers.addNodeBelow(id, "", {
+      loading: true,
+      author: `AI (${user.name})`,
+      authorId: user.id,
+    });
+
+    try {
+      const response = await promptAI(
+        `
+        You're a helpful assistant. This is a conversation already in progress.
+
+      \`\`\`
+      ${JSON.stringify(
+        helpers.getNodeAndIncomers(id, 5).map((n) => ({
+          id: n.id,
+          author: n.data.author,
+          replyTo: n.replyTo,
+          text: n.data.text,
+        }))
+      )}
+      \`\`\`
+
+      Join in on the conversation. Please say something relevant to the conversation.
+
+      `,
+        localStorage.getItem("systemMessage") || null
+      );
+
+      helpers.updateNodeData(newNode.id, {
+        loading: false,
+        text: response.trim(),
+        // text: response,
+      });
+    } catch (e) {
+      if (e.message.includes("API Key")) {
+        toast(
+          "You have to add an API key to get AI completions.\n\nClick the + button and the ⚙️ to open the settings.",
+          {
+            duration: 10000,
+          }
+        );
+      } else {
+        toast.error(e.message);
+      }
+    }
+  }
+
+  async function summarize() {
+    const [node, ...incomers] = helpers.getNodeAndIncomers(id);
+
+    const result = await promptAI(`
+      Can you analyze this message and give me the following as JSON:
+      
+      {
+        "topic": "<1-3 words describing the main topic>",
+        "tone": "<1 word description of the tone>",
+        "purpose": "<1 word, such as: questioning, challenging, expounding, arguing, satirizing, insulting, arguing, complimenting, encouraging, summarizing, concluding>"
+      }
+
+      It's a reply to the messages in the context.
+
+      MESSAGE:
+
+      ${node.data.text}
+
+      CONTEXT:
+
+      \`\`\`
+      ${JSON.stringify(
+        incomers.map((n) => ({
+          id: n.id,
+          author: n.data.author,
+          replyTo: n.replyTo,
+          text: n.data.text,
+        }))
+      )}
+      \`\`\`
+    `);
+
+    try {
+      const { tone, topic, purpose } = JSON.parse(result);
+      console.log({ tone, topic, purpose });
+      helpers.updateNodeData(id, {
+        tone,
+        topic,
+        purpose,
+      });
+    } catch (e) {
+      console.warn("Failed to summarize");
+    }
+  }
+
   function copy() {
     copyTextToClipboard(getTextToHere());
   }
 
   function onKeyDown(e) {
     let newNode = null;
-    if (e.metaKey && e.keyCode == 13) {
+
+    if (e.key === "Escape") {
+      textAreaRef?.current?.blur?.();
+    } else if (e.metaKey && e.keyCode == 13) {
       generate();
     } else if (e.altKey && e.shiftKey && e.keyCode === 13) {
       // TODO: Should it do something different when a selection is made, vs when the caret is just sitting somewhere?
@@ -217,6 +296,18 @@ function TextUpdaterNode({ id, data, selected }) {
   }
 
   function getColor() {
+    if (color) {
+      return color;
+    }
+
+    if (Object.keys(searchResults).length) {
+      if (searchResults[id]) {
+        return `rgba(${255 * searchResults[id].score},0,0)`;
+      } else {
+        return "gray";
+      }
+    }
+
     if (author.match(/^AI /)) {
       return "grey";
     }
@@ -226,7 +317,13 @@ function TextUpdaterNode({ id, data, selected }) {
   function quoteOrReply() {
     const newNode = helpers.addNodeBelow(
       id,
-      selection ? `> ${selection}\n\n` : "",
+      selection
+        ? `${selection
+            .trim()
+            .split("\n")
+            .map((n) => `> ${n}`)
+            .join("\n")}\n\n`
+        : "",
       {
         authorId: user.id,
         author: user.name,
@@ -234,6 +331,35 @@ function TextUpdaterNode({ id, data, selected }) {
     );
     focusOnNode(newNode.id);
   }
+
+  // useEffect(() => {
+  //   if (focused || selected) {
+  //     const set = focusMap.get(id) || {};
+  //     set[user.name] = true;
+  //     focusMap.set(id, set);
+  //     setHighlightedBy(Object.keys(set));
+  //   } else {
+  //     const set = focusMap.get(id) || {};
+  //     delete set[user.name];
+  //     focusMap.set(id, set);
+  //     setHighlightedBy(Object.keys(set));
+  //   }
+
+  //   function observer() {
+  //     setHighlightedBy(Object.keys(focusMap.get(id) || {}));
+  //   }
+  //   focusMap.observe(observer);
+  //   return () => focusMap.unobserve(observer);
+  // }, [focused, selected, focusMap]);
+  const searchResults = useRecoilValue(searchResultsState);
+
+  const matchesSearch =
+    text.toLowerCase().includes(search.toLowerCase()) || searchResults[id];
+
+  // const highlightedByInitials = highlightedBy.map(name => name.split(/\s+/).map(c => c[0]).join(''));
+
+  window.Color = Color;
+
   return (
     <>
       <NodeResizeControl
@@ -250,49 +376,52 @@ function TextUpdaterNode({ id, data, selected }) {
       </NodeResizeControl>
       <Handle type="target" position={targetPosition || "top"} />
       <div
-        className={`p-1 pt-4 border border-1 h-full w-full flex flex-col gap-2 rounded`}
+        className={`p-1 pt-4 border border-1 h-full w-full flex flex-col gap-2 rounded text-${getTextColor(getColor())}`}
         style={{
           border: selected ? "2px solid gray" : "2px solid transparent",
           minHeight: textHeight,
           minWidth: 600,
           background: getColor(),
+          opacity: search ? (matchesSearch ? 1 : 0.125) : 1,
         }}
       >
         <div className="flex flex-row justify-between">
-          <p className="px-2 pb-2 text-xl font-bold">{author}</p>
-          {deleting ? (
-            <div className="flex flex-row gap-4 mr-3 cursor-pointer ">
-              <div onClick={() => setDeleting(false)}>❌</div>
-              <div onClick={() => helpers.deleteNode(id)}>✅</div>
-            </div>
-          ) : (
-            <div
-              className="cursor-pointer mr-3"
-              onClick={() => setDeleting(true)}
-            >
-              🗑️
-            </div>
-          )}
+          <p className="px-2 pb-2 text-xl font-bold">{(author||'').match(/^AI/) ? 'AI' : author}</p>
+          <p>
+            {tone} {purpose} on {topic}
+          </p>
+          {/* <p>{highlightedByInitials.map(i => <span className="text-xs rounded-full p-2 border mx-1 inline-block leading-0">{i}</span>)}</p> */}
+          {isAuthor &&
+            (deleting ? (
+              <div className="flex flex-row gap-4 mr-3 cursor-pointer ">
+                <div onClick={() => setDeleting(false)}>❌</div>
+                <div onClick={() => helpers.deleteNode(id)}>✅</div>
+              </div>
+            ) : (
+              <div
+                className="cursor-pointer mr-3"
+                onClick={() => setDeleting(true)}
+              >
+                🗑️
+              </div>
+            ))}
         </div>
         <div className="flex-1 flex flex-col">
           <textarea
             id={`${id}_textarea`}
-            autoFocus
             ref={textAreaRef}
             style={{
               overscrollBehavior: "contain",
               resize: "none",
               // display: focused ? "block" : "none",
             }}
-            onKeyDown={onKeyDown}
+            onKeyDown={isAuthor ? onKeyDown : () => {}}
             name="text"
-            onChange={onChange}
-            className={`nodrag w-full h-full py-2 px-2 leading-6 rounded flex-1 dark:bg-gray-800 ${
-              focused ? "nowheel" : ""
-            }`}
+            onChange={isAuthor ? onChange : () => {}}
+            className={`nodrag w-full h-full py-2 px-2 leading-6 rounded flex-1 dark:bg-gray-800 text-black dark:text-white`}
             value={text}
             placeholder={loading ? "Loading" : "Type here"}
-            disabled={loading || authorId !== user.id}
+            disabled={loading}
             // rows={Math.max((text.length / 80 + 2) | 0, 10)}
             // cols={80}
           />
@@ -313,6 +442,14 @@ function TextUpdaterNode({ id, data, selected }) {
               onClick={generate}
             >
               Ask AI
+            </button>
+
+            <button
+              className="bg-transparent px-2 py-1 border rounded disabled:opacity-50"
+              disabled={!text}
+              onClick={summarize}
+            >
+              Analyze
             </button>
 
             {/* <button
@@ -348,7 +485,7 @@ function focusOnNode(id) {
     textEl.focus();
     textEl.selectionStart = textEl.value.length;
     textEl.selectionEnd = textEl.value.length;
-  }, 500);
+  }, 100);
 }
 
 function ResizeIcon() {
@@ -512,3 +649,28 @@ function useSelectionState(elementRef) {
 
   return selected;
 }
+
+function getTextColor(color) {
+  const c = new Color(color);
+  return c.luminance > .5 ? 'black' : 'white';
+}
+
+
+
+function getTextColorFromHex(hex) {
+  var c = hex.substring(1); // strip #
+  var rgb = parseInt(c, 16); // convert rrggbb to decimal
+  var r = (rgb >> 16) & 0xff; // extract red
+  var g = (rgb >> 8) & 0xff; // extract green
+  var b = (rgb >> 0) & 0xff; // extract blue
+
+  var luma = 0.2126 * r + 0.7152 * g + 0.0722 * b; // per ITU-R BT.709
+
+  if (luma < 40) {
+    return 'black';
+  }
+
+  return 'white';
+}
+
+

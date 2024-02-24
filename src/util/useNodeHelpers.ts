@@ -6,6 +6,7 @@ import {
   useNodesState,
   type Edge,
   type Node,
+  getOutgoers,
 } from "reactflow";
 import { getId } from "@/constants";
 import promptAI from "@/util/promptAI";
@@ -25,6 +26,10 @@ export default function useNodeHelpers() {
   const [nodes, setNodes, onNodesChange] = useNodesStateSynced();
   const [edges, setEdges, onEdgesChange] = useEdgesStateSynced();
 
+  window.nodes = nodes;
+  window.setNodes = setNodes;
+  window.nodesMap = nodesMap;
+
   // const { setNodes, setEdges, addNodes, addEdges } = useReactFlow();
 
   // const store = useStoreApi();
@@ -32,15 +37,80 @@ export default function useNodeHelpers() {
   return useMemo(() => {
     function updateNode(id: string, params: any) {
       const node = nodesMap.get(id);
-      nodesMap.set(id, { ...node, ...params });
+      if (node) {
+        nodesMap.set(id, { ...node, ...params });
+      }
     }
 
     function deleteNode(id: string) {
       nodesMap.delete(id);
+
+      // Remove edges; doesn't happen automatically
+      ydoc?.transact(() => {
+        for (const e of edgesMap.values()) {
+          if (e.target === id || e.source === id) {
+            edgesMap.delete(e.id);
+          }
+        }
+      });
+    }
+
+    function cleanUpEdges() {
+      console.log("cleaning up edges");
+      ydoc?.transact?.(() => {
+        for (const e of edgesMap.values()) {
+          if (!nodesMap.has(e.source) || !nodesMap.has(e.target)) {
+            edgesMap.delete(e.id);
+          }
+        }
+      });
+    }
+
+    function getNodeAndNeighbors(id: string, count=2) {
+      const allNodes: any = {};
+
+      let neighbors = [{ ...getNode(id), replyTo: [], }];
+
+      for (let i = 0; i < count; i++) {
+        neighbors.forEach((n: any) => { allNodes[n.id] = n });
+        neighbors = neighbors.map((n: any) => {
+          const incomers = getIncomers(n, nodes, edges).map(n => ({ ...n, replyTo: [] }));
+          const outgoers = getOutgoers(n, nodes, edges).map(n => ({ ...n, replyTo: [] }));
+          
+          incomers.forEach(i => n.replyTo.push(i.id));
+          outgoers.forEach(o => o.replyTo.push(n.id));
+
+          return [...incomers, ...outgoers];
+        }).flat();
+      }
+
+      return Object.values(allNodes);
+    }
+
+    function getNodeAndIncomers(id: string, count=2) {
+      const allNodes: any = {};
+
+      let neighbors = [{ ...getNode(id), replyTo: [], }];
+
+      for (let i = 0; i < count; i++) {
+        neighbors.forEach((n: any) => { allNodes[n.id] = n });
+        neighbors = neighbors.map((n: any) => {
+          const incomers = getIncomers(n, nodes, edges).map(n => ({ ...n, replyTo: [] }));
+          
+          incomers.forEach(i => n.replyTo.push(i.id));
+
+          return [...incomers];
+        }).flat();
+      }
+
+      return Object.values(allNodes);
     }
 
     function updateNodeData(id: string, data: any) {
       const node = nodesMap.get(id);
+      if (!id) {
+        throw new Error("Node does not exist");
+      }
       updateNode(id, { ...node, data: { ...node?.data, ...data } });
     }
 
@@ -64,10 +134,10 @@ export default function useNodeHelpers() {
 
       const fullText = [
         label
-        // @ts-ignore
-          ? { author: thisNode.data.author, content: thisNode.data.text }
-          // @ts-ignore
-          : thisNode.data.text,
+          ? // @ts-ignore
+            { author: thisNode.data.author, content: thisNode.data.text }
+          : // @ts-ignore
+            thisNode.data.text,
         ...allIncomers.map((n) =>
           label ? { author: n.data.author, content: n.data.text } : n.data.text
         ),
@@ -177,6 +247,22 @@ export default function useNodeHelpers() {
       edgesMap.set(edge.id, edge);
     }
 
+    function addNode(text = "", data = {}, opts = {}) {
+      const newNodeId = getId();
+
+      const newNode = {
+        id: newNodeId,
+        position: { x: 0, y: 0 },
+        type: "textUpdater",
+        data: { text, author: user.name, authorId: user.id, ...data },
+        ...opts,
+      };
+
+      nodesMap.set(newNodeId, newNode);
+
+      return newNode;
+    }
+
     function addNodeBelow(
       id: string | string[],
       text = "",
@@ -216,7 +302,7 @@ export default function useNodeHelpers() {
           edgesMap.set(newEdge.id, newEdge);
         }
       });
-      
+
       return newNode;
     }
 
@@ -314,6 +400,7 @@ export default function useNodeHelpers() {
     }
 
     return {
+      addNode,
       updateNode,
       updateNodeData,
       getTextToNode,
@@ -327,6 +414,9 @@ export default function useNodeHelpers() {
       getDownstreamNodeIds,
       summarizeNode,
       updateNodeSummary,
+      cleanUpEdges,
+      getNodeAndNeighbors,
+      getNodeAndIncomers,
     };
   }, [ydoc, nodes, edges]);
 }

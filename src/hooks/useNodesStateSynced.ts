@@ -1,20 +1,21 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from "react";
 import {
   type Node,
   type OnNodesChange,
   applyNodeChanges,
   getConnectedEdges,
-} from 'reactflow';
-import { type Map } from 'yjs';
-import { useRecoilValue } from 'recoil';
-import { docState } from '@/util/data';
+} from "reactflow";
+import { type Map } from "yjs";
+import { useRecoilValue } from "recoil";
+import { docState } from "@/util/data";
 
 // We are using nodesMap as the one source of truth for the nodes.
 // This means that we are doing all changes to the nodes in the map object.
 // Whenever the map changes, we update the nodes state.
 
-
-function useNodesStateSynced(initialNodes?: Node[]): [
+function useNodesStateSynced(
+  initialNodes?: Node[]
+): [
   Node[],
   React.Dispatch<React.SetStateAction<Node[]>>,
   OnNodesChange,
@@ -22,15 +23,15 @@ function useNodesStateSynced(initialNodes?: Node[]): [
 ] {
   const { ydoc } = useRecoilValue(docState);
   // @ts-ignore
-  const nodesMap = ydoc.getMap<Node>('nodes');
+  const nodesMap = ydoc.getMap<Node>("nodes");
   // @ts-ignore
   const edgesMap = ydoc.getMap<Edge>("edges");
 
-  useEffect(() => {
-    if (initialNodes) {
-      initialNodes.map(n => nodesMap.set(n.id, n));
-    }
-  }, []);
+  // useEffect(() => {
+  //   if (initialNodes && !nodesMap.size) {
+  //     initialNodes.map((n) => nodesMap.set(n.id, n));
+  //   }
+  // }, [initialNodes, nodesMap]);
 
   const [nodes, setNodes] = useState<Node[]>(initialNodes || []);
 
@@ -38,22 +39,39 @@ function useNodesStateSynced(initialNodes?: Node[]): [
     (nodesOrUpdater: React.SetStateAction<Node[]>) => {
       const seen = new Set<string>();
       const next =
-        typeof nodesOrUpdater === 'function'
-          // @ts-ignore
-          ? nodesOrUpdater([...nodesMap.values()]) 
+        typeof nodesOrUpdater === "function"
+          ? // @ts-ignore
+            nodesOrUpdater([...nodesMap.values()])
           : nodesOrUpdater;
-          
-          for (const node of next) {
-            seen.add(node.id);
-            nodesMap.set(node.id, node);
-          }
-          
-      // @ts-ignore
-      for (const node of nodesMap.values()) {
-        if (!seen.has(node.id)) {
-          nodesMap.delete(node.id);
+
+      ydoc?.transact(() => {
+        for (const node of next) {
+          seen.add(node.id);
+          nodesMap.set(node.id, node);
         }
-      }
+
+        // Clean up edges connected to deleted nodes
+        const edgesByNode: any = {};
+        // @ts-ignore
+        for (const edge of edgesMap.values()) {
+          edgesByNode[edge.source] = (edgesByNode[edge.source] || []).concat(
+            edge.id
+          );
+          edgesByNode[edge.target] = (edgesByNode[edge.target] || []).concat(
+            edge.id
+          );
+        }
+
+        // @ts-ignore
+        for (const node of nodesMap.values()) {
+          if (!seen.has(node.id)) {
+            nodesMap.delete(node.id);
+            for (const edgeId of edgesByNode[node.id] || []) {
+              edgesMap.delete(edgeId);
+            }
+          }
+        }
+      });
     },
     []
   );
@@ -65,9 +83,9 @@ function useNodesStateSynced(initialNodes?: Node[]): [
     const nextNodes = applyNodeChanges(changes, nodes as any);
 
     for (const change of changes) {
-      if (change.type === 'add' || change.type === 'reset') {
+      if (change.type === "add" || change.type === "reset") {
         nodesMap.set(change.item.id, change.item);
-      } else if (change.type === 'remove' && nodesMap.has(change.id)) {
+      } else if (change.type === "remove" && nodesMap.has(change.id)) {
         const deletedNode = nodesMap.get(change.id)!;
         const connectedEdges = getConnectedEdges(
           [deletedNode],

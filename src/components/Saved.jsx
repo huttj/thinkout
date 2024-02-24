@@ -7,7 +7,8 @@ import Settings from "@/components/Settings";
 import { docState, savedGraphs } from "@/util/data";
 import { v4 } from "uuid";
 import { useRecoilState, useRecoilValue } from "recoil";
-
+import HamburgerSvg from '@/icons/hamburger.svg';
+import Image from 'next/image';
 
 
 function stringIds(entry) {
@@ -131,14 +132,16 @@ export default function Saved({ onLayout = () => {} }) {
   //   load(data);
   // }
 
+
+
   if (!expanded) {
     return (
       <div
         ref={container}
-        className="fixed top-0 left-0 dark:bg-gray-800 bg-gray-100 text-3xl p-1 px-3 pb-2 m-3 rounded leading-none cursor-pointer"
+        className="fixed top-0 left-0 dark:bg-gray-800 bg-gray-100 text-3xl p-2 m-3 rounded leading-none cursor-pointer"
         onClick={() => setExpanded(true)}
       >
-        +
+        <Image src={HamburgerSvg} height={24} width={24} />
       </div>
     );
   }

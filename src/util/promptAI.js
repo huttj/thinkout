@@ -5,7 +5,7 @@ import axios from "axios";
  * @param {string} prompt
  * @returns
  */
-export default async function askAI(prompt) {
+export default async function promptAI(prompt, systemMessage='') {
   const model = localStorage.getItem("model");
 
   if (localStorage.getItem("ai") === "ollama") {
@@ -21,6 +21,7 @@ export default async function askAI(prompt) {
         model,
         prompt,
         stream: false,
+        system: systemMessage,
         // system: localStorage.getItem("systemMessage") || null,
         // system: `
         //   Keep your responses conscise and clear. Avoid overly
@@ -43,8 +44,6 @@ export default async function askAI(prompt) {
   }
 
   const messages = [];
-
-  const systemMessage = localStorage.getItem("systemMessage");
 
   if (systemMessage) {
     messages.push({

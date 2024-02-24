@@ -50,7 +50,7 @@ function Cursors({ cursors }: { cursors: Cursor[] }) {
                 </g>
               </svg>
               <p
-                className="bg-red p-[2px] px-2 rounded-full absolute top-0 left-6 leading-0 text-xs border border-white"
+                className="bg-red p-[2px] px-2 rounded-full absolute top-0 left-6 leading-0 text-xs border border-black dark:border-white"
                 style={{ backgroundColor: color }}
               >
                 {name}

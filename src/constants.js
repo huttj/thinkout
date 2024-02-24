@@ -7,7 +7,7 @@ export const getId = () => v4();
 
 
 export const defaultNode = {
-  id: 'root',
+  id: v4(),
   position: { x: 0, y: 0 },
   width: nodeWidth,
   height: nodeHeight,
