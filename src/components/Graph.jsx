@@ -1,8 +1,4 @@
-import React, {
-  useCallback,
-  useRef,
-  useEffect,
-} from "react";
+import React, { useCallback, useRef, useEffect } from "react";
 import ReactFlow, {
   MiniMap,
   Controls,
@@ -20,10 +16,9 @@ import dagre from "dagre";
 import { Toaster, toast } from "react-hot-toast";
 import TextUpdaterNode from "@/components/TextNode";
 
-import useCursorStateSynced from '@/hooks/useCursorStateSynced';
-import useNodesStateSynced from '@/hooks/useNodesStateSynced';
-import useEdgesStateSynced from '@/hooks/useEdgesStateSynced';
-
+import useCursorStateSynced from "@/hooks/useCursorStateSynced";
+import useNodesStateSynced from "@/hooks/useNodesStateSynced";
+import useEdgesStateSynced from "@/hooks/useEdgesStateSynced";
 
 import "reactflow/dist/style.css";
 
@@ -104,10 +99,33 @@ const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
   initialEdges
 );
 
+function download(data) {
+  const file = new File([JSON.stringify(data)], "thinkout.json", {
+    type: "text/plain",
+  });
+
+  const link = document.createElement("a");
+  const url = URL.createObjectURL(file);
+
+  link.href = url;
+  link.download = file.name;
+  document.body.appendChild(link);
+  link.click();
+
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(url);
+}
+
 function Flow() {
   const user = useRecoilValue(userState);
-  const [nodes, setNodes, onNodesChange, nodesMap] = useNodesStateSynced(initialNodes.map(n => ({ ...n, data: { ...n.data, authorId: user.id, author: user.name, }})));
-  const [edges, setEdges, onEdgesChange, edgesMap] = useEdgesStateSynced(initialEdges);
+  const [nodes, setNodes, onNodesChange, nodesMap] = useNodesStateSynced(
+    initialNodes.map((n) => ({
+      ...n,
+      data: { ...n.data, authorId: user.id, author: user.name },
+    }))
+  );
+  const [edges, setEdges, onEdgesChange, edgesMap] =
+    useEdgesStateSynced(initialEdges);
   const [cursors, onMouseMove] = useCursorStateSynced();
 
   const reactFlow = useReactFlow();
@@ -149,7 +167,7 @@ function Flow() {
         edgesMap.set(id, { id, source: connectingNodeId.current, target: id });
       }
     },
-    [screenToFlowPosition,]
+    [screenToFlowPosition]
   );
 
   const onLayout = useCallback(
@@ -166,14 +184,13 @@ function Flow() {
 
   useEffect(() => {
     function onZoom(e) {
-      
       // Zoom in
       if (e.metaKey && e.key === "=") {
         e.preventDefault();
         e.stopPropagation();
         reactFlow.zoomIn();
-      
-      // Zoom out
+
+        // Zoom out
       } else if (e.metaKey && e.key === "-") {
         e.preventDefault();
         e.stopPropagation();
@@ -217,10 +234,26 @@ function Flow() {
         onPointerMove={onMouseMove}
       >
         <Panel position="top-right">
-          <button onClick={() => onLayout("TB")} className="mr-2 border p-2 rounded">
-            Align Vertical
-          </button>
-          <button onClick={() => onLayout("LR")} className="border border p-2 rounded">Align Horizontal</button>
+          <div className="flex flex-row gap-2">
+            <button
+              onClick={() => onLayout("TB")}
+              className="border p-2 rounded"
+            >
+              Align Vertical
+            </button>
+            <button
+              onClick={() => onLayout("LR")}
+              className="border border p-2 rounded"
+            >
+              Align Horizontal
+            </button>
+            <button
+              className="border border p-2 rounded"
+              onClick={() => download({ nodes, edges })}
+            >
+              Download
+            </button>
+          </div>
         </Panel>
         <Controls />
         <MiniMap pannable zoomable />
