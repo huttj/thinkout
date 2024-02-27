@@ -12,14 +12,14 @@ export const docState = atom<{
   id: string | null,
   ydoc: Doc | null;
   provider: WebrtcProvider | null;
-  undo: UndoManager | null,
+  // undo: UndoManager | null,
 }>({
   key: "doc",
   default: {
     id: null,
     ydoc: null,
     provider: null,
-    undo: null
+    // undo: null
   },
   dangerouslyAllowMutability: true,
 });
@@ -35,6 +35,7 @@ export const userState = makeLocalAtom("user", {
 });
 
 export const settingsState = makeLocalAtom("settings", {
+  open: false,
   llm: "openid",
   apiKey: "",
   systemMessage: "",

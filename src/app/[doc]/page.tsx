@@ -7,6 +7,8 @@ import { IndexeddbPersistence } from "y-indexeddb";
 import { Doc, UndoManager } from "yjs";
 import Graph from "@/components/Graph";
 import usePreventZoom from "@/hooks/usePreventZoom";
+import FirstTime from "@/components/FirstTime";
+import Settings from "@/components/Settings";
 
 export default function DocPage(props: any) {
   return (
@@ -24,10 +26,7 @@ function Loader(props: any) {
     const ydoc = new Doc({ guid: id });
 
     const provider = new WebrtcProvider(`thinkout-${id}`, ydoc, {
-      signaling: [
-        "wss://ws.thinkout.app",
-        "ws://localhost:4444",
-      ],
+      signaling: ["wss://ws.thinkout.app", "ws://localhost:4444"],
     });
     const persistence = new IndexeddbPersistence(id, ydoc);
     // const undo = new UndoManager([ydoc.getMap('nodes'), ydoc.getMap('edges')]);
@@ -56,7 +55,7 @@ function Loader(props: any) {
         id: null,
         ydoc: null,
         provider: null,
-        undo: null,
+        // undo: null,
       });
 
       provider.destroy();
@@ -73,5 +72,11 @@ function Loader(props: any) {
     return <div>Loading...</div>;
   }
 
-  return <Graph />;
+  return (
+    <>
+      <Graph />
+      <Settings />
+      <FirstTime />
+    </>
+  );
 }

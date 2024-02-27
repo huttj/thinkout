@@ -3,7 +3,7 @@ import { useReactFlow, useStoreApi } from "reactflow";
 import { nodeHeight, nodeWidth } from "@/constants";
 import toast from "react-hot-toast";
 import LoadTranscript from "@/components/LoadTranscript";
-import Settings from "@/components/Settings";
+import Settings, { SettingsButton } from "@/components/Settings";
 import { docState, savedGraphs } from "@/util/data";
 import { v4 } from "uuid";
 import { useRecoilState, useRecoilValue } from "recoil";
@@ -166,7 +166,7 @@ export default function Saved({ onLayout = () => {} }) {
               className="border p-1 px-3"
               onLoad={loadTranscript}
             /> 
-            <Settings className="border p-1 px-3" />
+            <SettingsButton className="border p-1 px-3" />
           </div>
         </div>
 

@@ -26,10 +26,6 @@ export default function useNodeHelpers() {
   const [nodes, setNodes, onNodesChange] = useNodesStateSynced();
   const [edges, setEdges, onEdgesChange] = useEdgesStateSynced();
 
-  window.nodes = nodes;
-  window.setNodes = setNodes;
-  window.nodesMap = nodesMap;
-
   // const { setNodes, setEdges, addNodes, addEdges } = useReactFlow();
 
   // const store = useStoreApi();
