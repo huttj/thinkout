@@ -8,7 +8,7 @@ import {
   type Node,
   getOutgoers,
 } from "reactflow";
-import { getId } from "@/constants";
+import { NODE_SPACING_Y, getId } from "@/constants";
 import promptAI from "@/util/promptAI";
 import { useRecoilValue } from "recoil";
 import { docState, userState } from "./data";
@@ -279,7 +279,7 @@ export default function useNodeHelpers() {
         position: thisNode
           ? {
               x: thisNode.position.x,
-              y: thisNode.position.y + (thisNode.height || 0) + 50,
+              y: thisNode.position.y + (thisNode.height || 0) + NODE_SPACING_Y,
             }
           : { x: 0, y: 0 },
         type: "textUpdater",

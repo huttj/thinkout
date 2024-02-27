@@ -11,8 +11,9 @@ import ReactFlow, {
   Panel,
   SelectionMode,
 } from "reactflow";
-import Image from 'next/image';
-import SaveSvg from '@/icons/save.svg';
+import Image from "next/image";
+import SaveSvg from "@/icons/save.svg";
+import ColorSvg from "@/icons/color.svg";
 
 import dagre from "dagre";
 import { Toaster, toast } from "react-hot-toast";
@@ -21,16 +22,26 @@ import TextUpdaterNode from "@/components/TextNode";
 import useCursorStateSynced from "@/hooks/useCursorStateSynced";
 import useNodesStateSynced from "@/hooks/useNodesStateSynced";
 import useEdgesStateSynced from "@/hooks/useEdgesStateSynced";
+import getNodeHeightFromText from "@/util/getNodeHeightFromText";
 
 import "reactflow/dist/style.css";
 
-const nodeTypes = { textUpdater: TextUpdaterNode };
-
 // import data from "./data.json";
 import Saved from "@/components/Saved";
-import { getId, defaultNode, nodeWidth, nodeHeight } from "@/constants";
-import { docState, userState, vectorStoreState } from "@/util/data";
-import { useRecoilValue } from "recoil";
+import {
+  getId,
+  defaultNode,
+  nodeWidth,
+  nodeHeight,
+  NODE_SPACING_Y,
+} from "@/constants";
+import {
+  docState,
+  settingsState,
+  userState,
+  vectorStoreState,
+} from "@/util/data";
+import { useRecoilState, useRecoilValue } from "recoil";
 import Cursors from "./Cursors";
 import useNodeHelpers from "@/util/useNodeHelpers";
 import Search from "./Search";
@@ -38,6 +49,10 @@ import promptAI from "@/util/promptAI";
 import getEmbeddings from "@/util/getEmbeddings";
 import { MemoryVectorStore } from "langchain/vectorstores/memory";
 import kMeans from "@/util/kMeans";
+import CustomEdge from "./Edge";
+
+const nodeTypes = { textUpdater: TextUpdaterNode };
+const edgeTypes = { default: CustomEdge };
 
 // const initialNodes = data.nodes.map((n) => ({
 //   ...n,
@@ -78,8 +93,8 @@ function getLayoutedElements(nodes, edges, direction = "TB") {
 
   nodes.forEach((node) => {
     dagreGraph.setNode(node.id, {
-      width: node.width || nodeWidth,
-      height: node.height || nodeHeight,
+      width: 600 + 50,
+      height: getNodeHeightFromText(node.data.text) + NODE_SPACING_Y,
     });
   });
 
@@ -121,220 +136,19 @@ function getLayoutedElements(nodes, edges, direction = "TB") {
 
 function Flow(props) {
   const user = useRecoilValue(userState);
-  const [nodes, setNodes, onNodesChange, nodesMap] = useNodesStateSynced(
-    initialNodes.map((n) => ({
-      ...n,
-      data: { ...n.data, authorId: user.id, author: user.name },
-    }))
-  );
-  const [edges, setEdges, onEdgesChange, edgesMap] =
-    useEdgesStateSynced(initialEdges);
+  const [nodes, setNodes, onNodesChange, nodesMap] = useNodesStateSynced();
+  const [edges, setEdges, onEdgesChange, edgesMap] = useEdgesStateSynced();
   const [cursors, onMouseMove] = useCursorStateSynced();
+  const [settings, setSettings] = useRecoilState(settingsState);
 
   const reactFlow = useReactFlow();
   const reactFlowWrapper = useRef(null);
   const connectingNodeId = useRef(null);
   const helpers = useNodeHelpers();
-  const { ydoc } = useRecoilValue(docState);
 
-  const vector = useRecoilValue(vectorStoreState);
   // useEffect(() => {
   //   helpers.cleanUpEdges();
   // }, [helpers]);
-
-  async function loadColorEmbeddings() {
-    const colorStore = new MemoryVectorStore({
-      async embedDocuments(texts) {
-        const results = [];
-        for (const text of texts) {
-          results.push(await getEmbeddings(text));
-        }
-        return results;
-      },
-      embedQuery(text) {
-        return getEmbeddings(text);
-      },
-    });
-
-    colorStore.addDocuments(
-      ["red", "blue", "green"].map((color) => ({
-        pageContent: color,
-        metadata: {
-          id: color,
-        },
-      }))
-    );
-
-    window.colorStore = colorStore;
-  }
-
-  function fakeColorEmbeddings(embeddings) {
-    const colorStore = new MemoryVectorStore({
-      async embedDocuments(texts) {
-        const results = [];
-        for (const text of texts) {
-          results.push(await getEmbeddings(text));
-        }
-        return results;
-      },
-      embedQuery(text) {
-        return getEmbeddings(text);
-      },
-    });
-
-    colorStore.addVectors(
-      embeddings,
-      ["red", "blue", "green"].map((color, i) => ({
-        pageContent: color,
-        metadata: {
-          id: color,
-        },
-      }))
-    );
-
-    window.colorStore = colorStore;
-
-    return colorStore;
-  }
-
-  function colorSearchToColor(results) {
-    console.log(results);
-    const map = results.reduce((acc, n) => {
-      acc[n[0].pageContent] = n[1] * 255;
-      return acc;
-    }, {});
-    return `rgb(${map.red || 0}, ${map.green || 0}, ${map.blue || 0})`;
-  }
-
-  window.loadColorEmbeddings = loadColorEmbeddings;
-
-  async function summarizeTopicsByNode() {
-    const nodesWithVectors = [];
-
-    for (const node of nodes) {
-      if (node.data.topic) {
-        if (!window[node.data.topic]) {
-          window[node.data.topic] = await getEmbeddings(node.data.topic);
-        }
-        const embedding = window[node.data.topic];
-
-        nodesWithVectors.push({
-          ...node,
-          embedding,
-        });
-      }
-    }
-
-    const k = 3; // Number of clusters
-    const { centroids, assignments } = kMeans(
-      nodesWithVectors.map((n) => n.embedding),
-      k
-    );
-
-    console.log({
-      centroids,
-      assignments,
-    });
-
-    // window.vector = vector;
-
-    // window.nodesWithVectors = nodesWithVectors;
-
-    // vector.addVectors(
-    //   nodesWithVectors.map((n) => n.embedding),
-    //   nodesWithVectors.map((n) => ({
-    //     pageContent: n.data.text,
-    //     metadata: {
-    //       id: n.id,
-    //       author: n.data.author,
-    //       topic: n.data.topic,
-    //     },
-    //   }))
-    // );
-
-    // for (const node of nodesWithVectors) {
-    //   const distances = await vector.similaritySearchVectorWithScore(
-    //     node.embedding,
-    //     1000
-    //   );
-    //   const averageDistance =
-    //     distances.reduce((acc, n) => acc + n[1], 0) / distances.length;
-    //   node.averageDistance = averageDistance;
-    // }
-
-    // console.log(nodesWithVectors);
-
-    // nodesWithVectors.sort((a, b) => b.averageDistance - a.averageDistance);
-
-    const colors = fakeColorEmbeddings(centroids);
-
-    for (const node of nodesWithVectors) {
-      node.color = colorSearchToColor(
-        await colors.similaritySearchVectorWithScore(node.embedding, 10)
-      );
-    }
-
-    ydoc.transact(async () => {
-      for (const node of nodesWithVectors) {
-        const oldNode = nodesMap.get(node.id);
-        nodesMap.set(node.id, {
-          ...oldNode,
-          data: { ...oldNode.data, color: node.color },
-        });
-      }
-    });
-
-    // vector.addDocuments(nodes.map(n => ({
-    //   pageContent: n.data.text,
-    //   metadata: {
-    //     id: n.id,
-    //     author: n.data.author,
-    //     authorId: n.data.authorId,
-    //   }
-    // })));
-
-    // window.vector = vector;
-
-    // const embeddings = await Promise.all(nodes.map(n => getEmbeddings(n.data.text)));
-    // console.log(embeddings);
-    return;
-    const response = await promptAI(
-      `
-      Please summarize the following list of messages, in order, with short, concise topics,
-      in this format:
-
-      \`\`\`
-      [
-        {
-          "id": "<id>",
-          "topics": ["<topic 1>", "<topic 2>"]
-        }
-      ]
-      \`\`\`
-
-      Here is the list:
-      ${JSON.stringify(
-        nodes.map(({ id, data: { text } }) => ({ id, text })),
-        null,
-        2
-      )}
-
-      Remember to respond in valid JSON only.
-    `,
-      "Respond only in JSON."
-    );
-
-    try {
-      const parsed = JSON.parse(response);
-
-      parsed.map((n) => ({ ...n }));
-    } catch (e) {
-      console.log(response);
-      throw new Error("Failed to parse JSON from AI response.");
-    }
-  }
-
-  window.summarizeTopicsByNode = summarizeTopicsByNode;
 
   const { screenToFlowPosition, fitView } = useReactFlow();
   const onConnect = useCallback(
@@ -437,6 +251,7 @@ function Flow(props) {
         fitViewOptions={{ padding: 2 }}
         nodeOrigin={[0.5, 0]}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         minZoom={0.001}
         maxZoom={3}
         // snapToGrid
@@ -462,26 +277,44 @@ function Flow(props) {
               onClick={() => onLayout("TB")}
               className="border p-2 rounded dark:bg-gray-800 bg-gray-100 "
             >
-              Align Vertical
+              Realign
             </button>
-            <button
-              onClick={() => onLayout("LR")}
-              className="border border p-2 rounded dark:bg-gray-800 bg-gray-100 "
+
+            <div
+              className="dark:bg-gray-800 bg-gray-100 text-3xl p-1 px-3 pb-2 rounded leading-none cursor-pointer inline-block leading-0"
+              style={{
+                color: settings.colorNodes ? "white" : "black",
+                background: settings.colorNodes ? "black" : "white",
+              }}
+              onClick={() =>
+                setSettings({ ...settings, colorNodes: !settings.colorNodes })
+              }
             >
-              Align Horizontal
-            </button>
+              <Image
+                src={ColorSvg}
+                height={25}
+                width={25}
+                className="dark:text-white"
+              />
+            </div>
+
             <div
               className="dark:bg-gray-800 bg-gray-100 text-3xl p-1 px-3 pb-2 rounded leading-none cursor-pointer inline-block leading-0"
               onClick={() => download({ nodes, edges })}
             >
-              <Image src={SaveSvg} height={25} width={25} className="dark:text-white" />
+              <Image
+                src={SaveSvg}
+                height={25}
+                width={25}
+                className="dark:text-white"
+              />
             </div>
           </div>
         </Panel>
         <Controls />
         <MiniMap pannable zoomable />
 
-        <Background variant="dots" gap={12} size={1} />
+        {/* <Background variant="dots" gap={12} size={1} style={{ opacity: .25}} /> */}
         <Cursors cursors={cursors} />
       </ReactFlow>
       <Saved />

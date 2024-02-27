@@ -1,16 +1,13 @@
 import React, { useRef, useState, useEffect } from "react";
 import {
   Handle,
-  NodeResizeControl,
   useStoreApi,
-  useUpdateNodeInternals,
+  useReactFlow,
+  useStore,
+  updateEdge,
 } from "reactflow";
-import axios from "axios";
 import dagre from "dagre";
-import getColorForUser from "@/util/getColorForUser";
-import llamaTokenizer from "llama-tokenizer-js";
 import useNodeHelpers from "@/util/useNodeHelpers";
-import * as rb from "rangeblock";
 import askAI from "@/util/askAI";
 import toast from "react-hot-toast";
 import "reactflow/dist/style.css";
@@ -18,15 +15,23 @@ import {
   docState,
   searchResultsState,
   searchState,
+  settingsState,
   userState,
 } from "@/util/data";
 import { useRecoilValue } from "recoil";
 import stringToColor from "@/util/stringToColor";
 import promptAI from "@/util/promptAI";
-import Color from 'colorjs.io';
 
-const dagreGraph = new dagre.graphlib.Graph();
-dagreGraph.setDefaultEdgeLabel(() => ({}));
+import Color from "colorjs.io";
+import { XYZ_D65, OKLCH } from "colorjs.io/fn";
+
+import getNodeHeightFromText from "@/util/getNodeHeightFromText";
+import getNodeClassification from "@/util/getNodeClassification";
+import Image from "next/image";
+import reloadSvg from "@/icons/reload.svg";
+import deleteSvg from "@/icons/delete.svg";
+import { PurposeColors, ToneColors } from "@/util/tonesAndPurposes";
+import { useClassification } from "@/hooks/useTopicClassifier";
 
 export default function Wrapper(props) {
   const helpers = useNodeHelpers(props.id);
@@ -37,15 +42,20 @@ export default function Wrapper(props) {
   return <TextUpdaterNode {...props} />;
 }
 
+const zoomSelector = (s) => s.transform[2] <= 0.5;
+
 function TextUpdaterNode({ id, data, selected }) {
   const { ydoc } = useRecoilValue(docState);
   const search = useRecoilValue(searchState);
   const user = useRecoilValue(userState);
   const helpers = useNodeHelpers();
   const focusMap = ydoc.getMap("focus");
+  const { colorNodes } = useRecoilValue(settingsState);
   const [highlightedBy, setHighlightedBy] = useState(
     Object.keys(focusMap.get(id) || {})
   );
+  const { fitView } = useReactFlow();
+  // const zoomedOut = useStore(zoomSelector);
 
   const {
     data: { text = "", loading, author, authorId, color, tone, topic, purpose },
@@ -55,15 +65,19 @@ function TextUpdaterNode({ id, data, selected }) {
     sourcePosition,
   } = helpers.getNode(id);
 
+  const { addSelectedNodes } = useStoreApi().getState();
+
+  function selectThisNode() {
+    addSelectedNodes([id]);
+  }
+
   const isAuthor = user.id === authorId;
 
   const textAreaRef = useRef(null);
   const selection = useSelectionState(textAreaRef);
-
-  const [textHeight, setTextHeight] = useState(height);
   const [focused, setFocused] = useState(false);
-  const [deleting, setDeleting] = useState(false);
   const textChanged = useRef(false);
+  const [summarizing, setSummarizing] = useState(null);
 
   useEffect(() => {
     if (textAreaRef.current) {
@@ -71,23 +85,28 @@ function TextUpdaterNode({ id, data, selected }) {
         // Is zoom and not just scroll
         if (e.ctrlKey || e.metaKey) return;
 
-        if (focused || selected) {
+        if (selected || focused) {
           e.stopPropagation();
         }
       }
 
-      function onFocus() {
+      function onFocus(e) {
+        selectThisNode();
+        focusOnNode(id);
         setFocused(true);
       }
       function onBlur() {
         setFocused(false);
 
         // Todo: If text changes
-        if (textChanged.current) {
-          // helpers.updateNodeSummary(id);
+        if (textChanged.current || !text) {
           textChanged.current = false;
+          summarize();
         }
       }
+
+      // TODO: Allow drag passthrough, but click edits...
+
       textAreaRef.current.addEventListener("wheel", stopPropagation, {
         passive: true,
       });
@@ -101,7 +120,17 @@ function TextUpdaterNode({ id, data, selected }) {
         }
       };
     }
-  }, [textAreaRef, focused, selected, setFocused, helpers, id, textChanged]);
+  }, [
+    textAreaRef,
+    focused,
+    selected,
+    setFocused,
+    helpers,
+    id,
+    textChanged,
+    selectThisNode,
+    text,
+  ]);
 
   // window.store = useStoreApi();
 
@@ -111,7 +140,19 @@ function TextUpdaterNode({ id, data, selected }) {
   }
 
   async function generate() {
-    const fullText = helpers.getTextToNode(id, true);
+    // const fullText = helpers.getTextToNode(id, true);
+    const NODE_CONTEXT_LIMIT = 5; // TODO: Replace with text length filter
+
+    const fullText = helpers
+      .getNodeAndIncomers(id, 10)
+      .filter((n, i) => i < NODE_CONTEXT_LIMIT || n.data.summary)
+      .map((n, i) => ({
+        author: n.data.author,
+        content: `ID: ${n.id}; REPLY-TO: ${n.replyTo.join(", ")}; ${
+          i > NODE_CONTEXT_LIMIT ? "SUMMARY" : "MESSAGE"
+        }: ${i > NODE_CONTEXT_LIMIT ? n.data.summary : n.data.text}`,
+      }))
+      .reverse();
 
     const newNode = helpers.addNodeBelow(id, "", {
       loading: true,
@@ -119,14 +160,30 @@ function TextUpdaterNode({ id, data, selected }) {
       authorId: user.id,
     });
 
+    
+    textAreaRef?.current?.blur?.();
+    addSelectedNodes([]);
+    focusOnNode(newNode.id);
+
     try {
-      const response = await askAI(fullText);
+      const rawResponse = await askAI(fullText);
+
+      const response = rawResponse.split("; MESSAGE: ").pop();
 
       helpers.updateNodeData(newNode.id, {
         loading: false,
         text: response.trim(),
         // text: response,
       });
+
+      setTimeout(async () => {
+        const [node, ...incomers] = helpers.getNodeAndIncomers(newNode.id);
+        const summary = await getNodeClassification(node, incomers);
+        helpers.updateNodeData(newNode.id, summary);
+      }, 1);
+
+      return newNode;
+
     } catch (e) {
       if (e.message.includes("API Key")) {
         toast(
@@ -139,6 +196,8 @@ function TextUpdaterNode({ id, data, selected }) {
         toast.error(e.message);
       }
     }
+
+    return newNode;
   }
 
   async function generateNew() {
@@ -190,47 +249,32 @@ function TextUpdaterNode({ id, data, selected }) {
   }
 
   async function summarize() {
-    const [node, ...incomers] = helpers.getNodeAndIncomers(id);
-
-    const result = await promptAI(`
-      Can you analyze this message and give me the following as JSON:
-      
-      {
-        "topic": "<1-3 words describing the main topic>",
-        "tone": "<1 word description of the tone>",
-        "purpose": "<1 word, such as: questioning, challenging, expounding, arguing, satirizing, insulting, arguing, complimenting, encouraging, summarizing, concluding>"
-      }
-
-      It's a reply to the messages in the context.
-
-      MESSAGE:
-
-      ${node.data.text}
-
-      CONTEXT:
-
-      \`\`\`
-      ${JSON.stringify(
-        incomers.map((n) => ({
-          id: n.id,
-          author: n.data.author,
-          replyTo: n.replyTo,
-          text: n.data.text,
-        }))
-      )}
-      \`\`\`
-    `);
-
-    try {
-      const { tone, topic, purpose } = JSON.parse(result);
-      console.log({ tone, topic, purpose });
+    if (!text) {
       helpers.updateNodeData(id, {
-        tone,
-        topic,
-        purpose,
+        topic: null,
+        tone: null,
+        purpose: null,
+        summary: null,
       });
+      return;
+    }
+
+    // const { text } = node.data.text;
+    setSummarizing(text);
+    const [node, ...incomers] = helpers.getNodeAndIncomers(id);
+    try {
+      const result = await getNodeClassification(node, incomers);
+      if (!summarizing || summarizing === text) {
+        helpers.updateNodeData(id, result);
+        setSummarizing(null);
+
+        // TODO: Trigger coloring based on topic
+      }
     } catch (e) {
-      console.warn("Failed to summarize");
+      if (summarizing === text) {
+        setSummarizing(null);
+      }
+      toast.error(e.message);
     }
   }
 
@@ -238,12 +282,13 @@ function TextUpdaterNode({ id, data, selected }) {
     copyTextToClipboard(getTextToHere());
   }
 
-  function onKeyDown(e) {
+  async function onKeyDown(e) {
     let newNode = null;
 
     if (e.key === "Escape") {
       textAreaRef?.current?.blur?.();
     } else if (e.metaKey && e.keyCode == 13) {
+      textAreaRef?.current?.blur?.();
       generate();
     } else if (e.altKey && e.shiftKey && e.keyCode === 13) {
       // TODO: Should it do something different when a selection is made, vs when the caret is just sitting somewhere?
@@ -264,38 +309,7 @@ function TextUpdaterNode({ id, data, selected }) {
     newNode && focusOnNode(newNode.id);
   }
 
-  useEffect(() => {
-    if (!textAreaRef.current || textHeight === null) return;
-
-    const outerHeight = textAreaRef.current.offsetHeight;
-    const extraHeight = (height || 0) - outerHeight;
-
-    const targetHeight = textAreaRef.current.scrollHeight;
-
-    setTextHeight(Math.min(600, targetHeight + extraHeight));
-  }, [height, text, helpers, textAreaRef]);
-
-  function clearSize() {
-    setTextHeight(null);
-  }
-
-  // window.helpers = helpers;
-
-  // TODO: Want to make new replies and new quotes, especially when triggered via keyboard, focus on the new textarea
-  // useEffect(() => {
-  //   setTimeout(() => {
-  //     if (textAreaRef) {
-  //       textAreaRef.current.focus();
-  //     }
-  //   }, 10)
-  // }, [])
-
-  function focus() {
-    setFocused(true);
-    setTimeout(() => textAreaRef.current?.focus?.(), 1);
-  }
-
-  function getColor() {
+  function getNodeColor() {
     if (color) {
       return color;
     }
@@ -308,27 +322,37 @@ function TextUpdaterNode({ id, data, selected }) {
       }
     }
 
-    if (author.match(/^AI /)) {
+    return "";
+  }
+
+  function getAuthorColor() {
+    if (author.match(/^AI/)) {
       return "grey";
     }
     return stringToColor(author);
   }
 
-  function quoteOrReply() {
+  function quote() {
     const newNode = helpers.addNodeBelow(
       id,
-      selection
-        ? `${selection
-            .trim()
-            .split("\n")
-            .map((n) => `> ${n}`)
-            .join("\n")}\n\n`
-        : "",
+      `${selection
+        .trim()
+        .split("\n")
+        .map((n) => `> ${n}`)
+        .join("\n")}\n\n`,
       {
         authorId: user.id,
         author: user.name,
       }
     );
+    focusOnNode(newNode.id);
+  }
+
+  function reply() {
+    const newNode = helpers.addNodeBelow(id, "", {
+      authorId: user.id,
+      author: user.name,
+    });
     focusOnNode(newNode.id);
   }
 
@@ -358,134 +382,222 @@ function TextUpdaterNode({ id, data, selected }) {
 
   // const highlightedByInitials = highlightedBy.map(name => name.split(/\s+/).map(c => c[0]).join(''));
 
-  window.Color = Color;
+  function focusOnNode(id) {
+    setTimeout(() => {
+      const textEl = document.getElementById(`${id}_textarea`);
+      textEl.focus();
+      textEl.selectionStart = textEl.value.length;
+      textEl.selectionEnd = textEl.value.length;
+      fitView({ nodes: [{ id }], padding: 0.005, maxZoom: 1.25, duration: 300 });
+    }, 100);
+  }
+
+  const classificationColor = useClassification(topic);
+  const nodeColor =
+    colorNodes && topic ? lowerColorfulness(classificationColor, 1.2) : "";
 
   return (
-    <>
-      <NodeResizeControl
-        style={{
-          background: "transparent",
-          border: "none",
-        }}
-        minWidth={600}
-        minHeight={200}
-        onResize={clearSize}
-        onResizeEnd={(_, params) => helpers.updateNode(id, params)}
-      >
-        <ResizeIcon />
-      </NodeResizeControl>
-      <Handle type="target" position={targetPosition || "top"} />
+    <div>
       <div
-        className={`p-1 pt-4 border border-1 h-full w-full flex flex-col gap-2 rounded text-${getTextColor(getColor())}`}
+        className="absolute top-0 left-0 translate-y-[-100%] rounded-full inline-block p-1 px-4"
         style={{
-          border: selected ? "2px solid gray" : "2px solid transparent",
-          minHeight: textHeight,
-          minWidth: 600,
-          background: getColor(),
-          opacity: search ? (matchesSearch ? 1 : 0.125) : 1,
+          background: getAuthorColor(),
+          color: getTextColor(getAuthorColor()),
         }}
       >
-        <div className="flex flex-row justify-between">
-          <p className="px-2 pb-2 text-xl font-bold">{(author||'').match(/^AI/) ? 'AI' : author}</p>
-          <p>
-            {tone} {purpose} on {topic}
-          </p>
-          {/* <p>{highlightedByInitials.map(i => <span className="text-xs rounded-full p-2 border mx-1 inline-block leading-0">{i}</span>)}</p> */}
-          {isAuthor &&
-            (deleting ? (
-              <div className="flex flex-row gap-4 mr-3 cursor-pointer ">
-                <div onClick={() => setDeleting(false)}>❌</div>
-                <div onClick={() => helpers.deleteNode(id)}>✅</div>
-              </div>
-            ) : (
-              <div
-                className="cursor-pointer mr-3"
-                onClick={() => setDeleting(true)}
-              >
-                🗑️
-              </div>
-            ))}
-        </div>
+        {author}
+      </div>
+
+      <Classification
+        className="absolute top-0 right-0 translate-y-[-100%]"
+        color={color}
+        loading={summarizing}
+        tone={tone}
+        topic={topic}
+        purpose={purpose}
+        selected={selected}
+        reload={summarize}
+        summarizing={summarizing}
+        text={text}
+      />
+
+      <div
+        className={`mt-3 h-full w-full flex flex-col gap-2 rounded relative border border-1`}
+        style={{
+          // border: selected ? "2px solid gray" : "2px solid transparent",
+          height: getNodeHeightFromText(text),
+          width: 600,
+        }}
+      >
+        <Handle type="target" position={targetPosition || "top"} />
         <div className="flex-1 flex flex-col">
           <textarea
             id={`${id}_textarea`}
             ref={textAreaRef}
             style={{
+              outline: "none",
               overscrollBehavior: "contain",
               resize: "none",
-              // display: focused ? "block" : "none",
+              background: nodeColor,
+              color: colorNodes ? getTextColor(nodeColor) : "",
             }}
             onKeyDown={isAuthor ? onKeyDown : () => {}}
             name="text"
             onChange={isAuthor ? onChange : () => {}}
-            className={`nodrag w-full h-full py-2 px-2 leading-6 rounded flex-1 dark:bg-gray-800 text-black dark:text-white`}
+            className="nodrag w-full h-full py-2 px-2 leading-6 rounded flex-1 dark:bg-gray-800 text-black dark:text-white"
             value={text}
             placeholder={loading ? "Loading" : "Type here"}
             disabled={loading}
-            // rows={Math.max((text.length / 80 + 2) | 0, 10)}
-            // cols={80}
           />
-          {/* <div className="flex-1 w-full h-full" style={{ display: focused ? "none" : "block", }} onClick={focus}>{text ? text.split('\n').map((line, i) => <p key={i}>{line}</p>) : <em>Empty</em>}</div> */}
         </div>
-        <div className="flex flex-row justify-between gap-2 flex-0 items-center">
-          <div className="flex-0 flex flex-row gap-2">
-            <button
-              className="bg-transparent px-2 py-1 border rounded"
-              onClick={quoteOrReply}
-            >
-              {selection ? "Quote" : "Reply"}
-            </button>
+        <Handle type="source" position={sourcePosition || "bottom"} />
+        {selected && authorId === user.id && (
+          <div className="absolute right-[-36px] top-0 bottom-0 flex flex-col justify-center">
+            <Image
+              src={deleteSvg}
+              height={24}
+              width={24}
+              className="cursor-pointer"
+              onClick={() => helpers.deleteNode(id)}
+            />
+          </div>
+        )}
+      </div>
 
-            <button
-              className="bg-transparent px-2 py-1 border rounded disabled:opacity-50"
-              disabled={!text}
-              onClick={generate}
-            >
-              Ask AI
-            </button>
+      {selected && (
+        <div className="flex-0 flex flex-row justify-between mt-3">
+          <button
+            className="bg-gray-600 text-white px-2 py-1 border rounded disabled:opacity-50 hover:bg-gray-500"
+            disabled={!text}
+            onClick={generate}
+          >
+            Ask AI
+          </button>
 
+          <div className="flex flex-row gap-2">
+            {selection && (
+              <button
+                className="bg-gray-600 text-white px-2 py-1 border rounded hover:bg-gray-500"
+                onClick={quote}
+              >
+                Quote
+              </button>
+            )}
             <button
-              className="bg-transparent px-2 py-1 border rounded disabled:opacity-50"
-              disabled={!text}
-              onClick={summarize}
+              className="bg-gray-600 text-white px-2 py-1 border rounded hover:bg-gray-500"
+              onClick={reply}
             >
-              Analyze
+              Reply
             </button>
+          </div>
 
-            {/* <button
+          {/* <button
               className="bg-transparent px-2 py-1 border rounded disabled:opacity-50"
               disabled={!text || !data.summary}
               onClick={() => toast(data.summary)}
             >
               Show summary
             </button> */}
-          </div>
-          {/* Add to a right-click menu or select toolbar */}
-          {/* <button onClick={copy}>Copy thread</button>  */}
-
-          <div className="text-sm mr-4 flex-1 text-right">
-            <span className="opacity-70">
-              {text.length === 0 ? 0 : text.split(" ").length.toLocaleString()}{" "}
-              words,{" "}
-            </span>
-            <span className="opacity-70">
-              {llamaTokenizer.encode(text).length.toLocaleString()} tokens
-            </span>
-          </div>
         </div>
-      </div>
-      <Handle type="source" position={sourcePosition || "bottom"} />
-    </>
+      )}
+    </div>
   );
 }
 
-function focusOnNode(id) {
-  setTimeout(() => {
-    const textEl = document.getElementById(`${id}_textarea`);
-    textEl.focus();
-    textEl.selectionStart = textEl.value.length;
-    textEl.selectionEnd = textEl.value.length;
-  }, 100);
+function lowerColorfulness(color, multiplier = 1) {
+  const c = new Color(color || "gray");
+  c.to("oklch");
+  c.oklch.c = 0.15 / multiplier;
+  return c.toString("hex");
+}
+
+function Classification(props) {
+  const tone =
+    props.loading || props.tone ? (
+      <span style={{ color: lowerColorfulness(ToneColors[props.tone]) }}>
+        {props.tone}
+      </span>
+    ) : (
+      "\u00A0"
+    );
+  const purpose =
+    props.loading || props.purpose ? (
+      <span style={{ color: lowerColorfulness(PurposeColors[props.purpose]) }}>
+        {props.purpose}
+      </span>
+    ) : (
+      "\u00A0"
+    );
+
+  const toneAndPurpose =
+    !props.tone && !props.purpose ? (
+      <em className="opacity-50">No tone or purpose</em>
+    ) : (
+      <>
+        {tone} {purpose}
+      </>
+    );
+
+  let topic = props.loading ? (
+    "Classifying..."
+  ) : !props.topic ? (
+    <em className="opacity-50">No topic</em>
+  ) : (
+    props.topic
+  );
+
+  // This is hokey. Maybe I'll do some visual fine-tuning later...
+  // if (props.topic && (props.topic.length > 25)) {
+  //   for (let i = (props.topic.length / 2) | 0 + 1; i >= 0; i--) {
+  //     const char = props.topic[i];
+  //     if (char === " ") {
+  //       topic = (
+  //         <>
+  //           <span>{props.topic.slice(0, i)}</span>
+  //           <br />
+  //           <span>{props.topic.slice(i)}</span>
+  //         </>
+  //       );
+  //       break;
+  //     }
+  //   }
+  // }
+  const classificationColor = useClassification(props.topic);
+  const topicColor = props.topic
+    ? lowerColorfulness(classificationColor)
+    : classificationColor;
+
+  return (
+    <div className={`text-right ${props.className || ""}`}>
+      <p className="text-gray-400 leading-none mb-1">
+        {props.loading ? "\u00A0" : toneAndPurpose}
+      </p>
+      <p
+        className="text-gray-600 text-lg leading-none"
+        style={{
+          // fontWeight: "bold",
+          color: props.loading ? "gray" : topicColor,
+          maxWidth: 260,
+          // textOverflow: "ellipsis",
+          // overflow: "hidden",
+          // whiteSpace: "nowrap",
+        }}
+      >
+        {topic}
+      </p>
+      {props.selected && !props.summarizing && props.text && (
+        <div className="absolute right-[-36px]  top-0 bottom-0 flex flex-col justify-center">
+          <Image
+            onClick={props.reload}
+            src={reloadSvg}
+            height={24}
+            width={24}
+            className="text-gray-600 hover:text-gray-500  opacity-50 hover:opacity-40 cursor-pointer"
+          />
+        </div>
+      )}
+    </div>
+  );
 }
 
 function ResizeIcon() {
@@ -651,11 +763,9 @@ function useSelectionState(elementRef) {
 }
 
 function getTextColor(color) {
-  const c = new Color(color);
-  return c.luminance > .5 ? 'black' : 'white';
+  const c = new Color(color || '#666666');
+  return c.luminance > 0.5 ? "black" : "white";
 }
-
-
 
 function getTextColorFromHex(hex) {
   var c = hex.substring(1); // strip #
@@ -667,10 +777,8 @@ function getTextColorFromHex(hex) {
   var luma = 0.2126 * r + 0.7152 * g + 0.0722 * b; // per ITU-R BT.709
 
   if (luma < 40) {
-    return 'black';
+    return "black";
   }
 
-  return 'white';
+  return "white";
 }
-
-

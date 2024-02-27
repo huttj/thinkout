@@ -1,7 +1,11 @@
 import {v4} from 'uuid';
 
+// Not really used...
 export const nodeWidth = 200;
 export const nodeHeight = 100;
+
+export const NODE_SPACING_Y = 100;
+
 
 export const getId = () => v4();
 

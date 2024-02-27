@@ -121,16 +121,18 @@ export default function Saved({ onLayout = () => {} }) {
   //   }
   // }
 
-  // async function loadTranscript(data) {
-  //   data.nodes = data.nodes.map((n) => ({
-  //     ...n,
-  //     position: { x: 0, y: 0 },
-  //     width: nodeWidth,
-  //     height: nodeHeight,
-  //     type: "textUpdater",
-  //   }));
-  //   load(data);
-  // }
+  async function loadTranscript(data) {
+    data.nodes = data.nodes.map((n) => ({
+      ...n,
+      position: n.position || { x: 0, y: 0 },
+      width: n.width || nodeWidth,
+      height: n.height || nodeHeight,
+      type: n.type || "textUpdater",
+    }));
+    setNodes(data.nodes);
+    setEdges(data.edges);
+    // load(data);
+  }
 
 
 
@@ -159,11 +161,11 @@ export default function Saved({ onLayout = () => {} }) {
             </button>
             {/* <button className="border p-1 px-3" onClick={loadFromClipboard}>
               📋
-            </button>
+            </button> */}
             <LoadTranscript
               className="border p-1 px-3"
               onLoad={loadTranscript}
-            /> */}
+            /> 
             <Settings className="border p-1 px-3" />
           </div>
         </div>

@@ -38,6 +38,7 @@ export const settingsState = makeLocalAtom("settings", {
   llm: "openid",
   apiKey: "",
   systemMessage: "",
+  colorNodes: false,
 });
 
 export const savedGraphs = makeLocalAtom('savedGraphs', []);

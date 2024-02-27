@@ -8,7 +8,8 @@ export default function LoadTranscript(props) {
 
   function load() {
     try {
-      props?.onLoad(parseTranscriptWithEdges(text));
+      // props?.onLoad(parseTranscriptWithEdges(text));
+      props?.onLoad(JSON.parse(text));
       setOpen(false);
     } catch (e) {
       toast.error(`Failed to parse transcript: ${e.message}`);

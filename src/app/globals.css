@@ -16,7 +16,7 @@ html, body {touch-action: none;}
 
 :root {
   --foreground-rgb: 0, 0, 0;
-  --background-start-rgb: 214, 219, 220;
+  --background-start-rgb: 245, 245, 245;
   --background-end-rgb: 255, 255, 255;
 }
 
@@ -44,4 +44,26 @@ body {
   .text-balance {
     text-wrap: balance;
   }
+}
+
+
+.react-flow__handle-top.react-flow__handle {
+  width: 16px;
+  height: 16px;
+  top: -11px;
+  border: 2px solid white;
+  background-color: #cccccc;
+}
+
+.react-flow__handle-bottom.react-flow__handle {
+  width: 16px;
+  height: 16px;
+  bottom: -11px;
+  border: 2px solid white;
+  background-color: #cccccc;
+}
+
+path.react-flow__edge-path {
+  stroke-width: 2px;
+  stroke: #cccccc;
 }
