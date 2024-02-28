@@ -57,13 +57,14 @@ function TextUpdaterNode({ id, data, selected }) {
   const { fitView } = useReactFlow();
   // const zoomedOut = useStore(zoomSelector);
 
+  const thisNode = helpers.getNode(id);
   const {
     data: { text = "", loading, author, authorId, color, tone, topic, purpose },
     width,
     height,
     targetPosition,
     sourcePosition,
-  } = helpers.getNode(id);
+  } = thisNode;
 
   const { addSelectedNodes } = useStoreApi().getState();
 
@@ -154,36 +155,54 @@ function TextUpdaterNode({ id, data, selected }) {
       }))
       .reverse();
 
-    const newNode = helpers.addNodeBelow(id, "", {
+    const newNode = helpers.addNodeBelow(id, "Loading...", {
       loading: true,
       author: `AI`,
       authorId: user.id,
     });
 
-    
     textAreaRef?.current?.blur?.();
     addSelectedNodes([]);
     focusOnNode(newNode.id);
 
     try {
-      const rawResponse = await askAI(fullText);
+      const RETRY_LIMIT = 3;
+      for (let i = 0; i < RETRY_LIMIT; i++) {
+        const rawResponse = await askAI(fullText);
 
-      const response = rawResponse.split("; MESSAGE: ").pop();
+        const response = rawResponse.split("; MESSAGE: ").pop();
 
-      helpers.updateNodeData(newNode.id, {
-        loading: false,
-        text: response.trim(),
-        // text: response,
-      });
+        // It replied with SUMMARY: once--
+        // ID: 7ef409c7-7a79-4e34-a9bd-908847fcb167; REPLY-TO: 91061296-ab09-42d7-bc7f-d2c9596c35cf; SUMMARY: Acknowledgment of the complexities of navigating communication styles in real life situations similar to gameplay scenarios
+        if (!response.includes("REPLY-TO:")) {
+          helpers.updateNodeData(newNode.id, {
+            loading: false,
+            text: response.trim(),
+            // text: response,
+          });
+          break;
+        } else {
+          helpers.updateNodeData(newNode.id, {
+            text: `Retrying ${i+1} of ${RETRY_LIMIT}...`,
+            // text: response,
+          });
+        }
+        if (i === RETRY_LIMIT) {
+          helpers.updateNodeData(newNode.id, {
+            text: `ERROR! Response failed. Here's what we got for the last request: \n\n${rawResponse}`,
+            // text: response,
+          });
+        }
+      }
 
       setTimeout(async () => {
+        helpers.updateNodeData(newNode.id, { summarizing: true });
         const [node, ...incomers] = helpers.getNodeAndIncomers(newNode.id);
         const summary = await getNodeClassification(node, incomers);
-        helpers.updateNodeData(newNode.id, summary);
+        helpers.updateNodeData(newNode.id, { ...summary, summarizing: false });
       }, 1);
 
       return newNode;
-
     } catch (e) {
       if (e.message.includes("API Key")) {
         toast(
@@ -255,6 +274,9 @@ function TextUpdaterNode({ id, data, selected }) {
         tone: null,
         purpose: null,
         summary: null,
+
+        // TODO: Move from local state to node state, completely
+        summarizing: true,
       });
       return;
     }
@@ -265,7 +287,7 @@ function TextUpdaterNode({ id, data, selected }) {
     try {
       const result = await getNodeClassification(node, incomers);
       if (!summarizing || summarizing === text) {
-        helpers.updateNodeData(id, result);
+        helpers.updateNodeData(id, { ...result, summarizing: false });
         setSummarizing(null);
 
         // TODO: Trigger coloring based on topic
@@ -388,7 +410,12 @@ function TextUpdaterNode({ id, data, selected }) {
       textEl.focus();
       textEl.selectionStart = textEl.value.length;
       textEl.selectionEnd = textEl.value.length;
-      fitView({ nodes: [{ id }], padding: 0.005, maxZoom: 1.25, duration: 300 });
+      fitView({
+        nodes: [{ id }],
+        padding: 0.005,
+        maxZoom: 1.25,
+        duration: 300,
+      });
     }, 100);
   }
 
@@ -411,13 +438,13 @@ function TextUpdaterNode({ id, data, selected }) {
       <Classification
         className="absolute top-0 right-0 translate-y-[-100%]"
         color={color}
-        loading={summarizing}
+        loading={loading}
+        summarizing={summarizing || thisNode.data.summarizing}
         tone={tone}
         topic={topic}
         purpose={purpose}
         selected={selected}
         reload={summarize}
-        summarizing={summarizing}
         text={text}
       />
 
@@ -446,7 +473,7 @@ function TextUpdaterNode({ id, data, selected }) {
             onChange={isAuthor ? onChange : () => {}}
             className="nodrag w-full h-full py-2 px-2 leading-6 rounded flex-1 dark:bg-gray-800 text-black dark:text-white"
             value={text}
-            placeholder={loading ? "Loading" : "Type here"}
+            placeholder={loading ? text || "Loading..." : "Type here"}
             disabled={loading}
           />
         </div>
@@ -538,7 +565,7 @@ function Classification(props) {
       </>
     );
 
-  let topic = props.loading ? (
+  let topic = props.summarizing ? (
     "Classifying..."
   ) : !props.topic ? (
     <em className="opacity-50">No topic</em>
@@ -563,14 +590,18 @@ function Classification(props) {
   //   }
   // }
   const classificationColor = useClassification(props.topic);
-  const topicColor = props.topic
+  const topicColor = (props.topic && !props.summarizing)
     ? lowerColorfulness(classificationColor)
     : classificationColor;
+
+  if (props.loading) {
+    return null;
+  }
 
   return (
     <div className={`text-right ${props.className || ""}`}>
       <p className="text-gray-400 leading-none mb-1">
-        {props.loading ? "\u00A0" : toneAndPurpose}
+        {props.summarizing ? "\u00A0" : toneAndPurpose}
       </p>
       <p
         className="text-gray-600 text-lg leading-none"
@@ -763,7 +794,7 @@ function useSelectionState(elementRef) {
 }
 
 function getTextColor(color) {
-  const c = new Color(color || '#666666');
+  const c = new Color(color || "#666666");
   return c.luminance > 0.5 ? "black" : "white";
 }
 

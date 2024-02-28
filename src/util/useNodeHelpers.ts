@@ -43,6 +43,7 @@ export default function useNodeHelpers() {
 
       // Remove edges; doesn't happen automatically
       ydoc?.transact(() => {
+        // @ts-ignore
         for (const e of edgesMap.values()) {
           if (e.target === id || e.source === id) {
             edgesMap.delete(e.id);
@@ -54,6 +55,7 @@ export default function useNodeHelpers() {
     function cleanUpEdges() {
       console.log("cleaning up edges");
       ydoc?.transact?.(() => {
+        // @ts-ignore
         for (const e of edgesMap.values()) {
           if (!nodesMap.has(e.source) || !nodesMap.has(e.target)) {
             edgesMap.delete(e.id);
@@ -74,6 +76,7 @@ export default function useNodeHelpers() {
           const outgoers = getOutgoers(n, nodes, edges).map(n => ({ ...n, replyTo: [] }));
           
           incomers.forEach(i => n.replyTo.push(i.id));
+          // @ts-ignore
           outgoers.forEach(o => o.replyTo.push(n.id));
 
           return [...incomers, ...outgoers];
