@@ -89,10 +89,23 @@ export default function useNodeHelpers() {
     function getNodeAndIncomers(id: string, count=2) {
       const allNodes: any = {};
 
-      let neighbors = [{ ...getNode(id), replyTo: [], }];
-
+      let order = 1;
+      
+      let neighbors: any[] = [{ ...getNode(id), replyTo: [], order, }];
+      
       for (let i = 0; i < count; i++) {
-        neighbors.forEach((n: any) => { allNodes[n.id] = n });
+
+        neighbors = neighbors.reduce((acc: any, n: any) => {
+          // Trying to deduplicate here; only add unseen nodes, don't fan out neighbors who've been seen before
+          if (!allNodes[n.id]) {
+            order++;
+            allNodes[n.id] = n;
+            n.order = order;
+            acc.push(n);
+          }
+          return acc;
+        }, []);
+
         neighbors = neighbors.map((n: any) => {
           const incomers = getIncomers(n, nodes, edges).map(n => ({ ...n, replyTo: [] }));
           

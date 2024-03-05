@@ -6,22 +6,22 @@ import kMeans from "@/util/kMeans";
 import { MemoryVectorStore } from "langchain/vectorstores/memory";
 
 const classifierState = atom({
-  key: 'classifier',
+  key: "classifier",
   default: {
     classifier: null,
-  }
+  },
 });
 
 export function useClassification(topic: string) {
-  const [color, setColor] = useState('#666666');
+  const [color, setColor] = useState("#666666");
   const { getColor } = useTopicClassifier();
   useEffect(() => {
     if (topic) {
       getColor(topic)
         .then(setColor)
-        .catch(() => setColor('#666666'));
+        .catch(() => setColor("#666666"));
     } else {
-      setColor('#666666');
+      setColor("#666666");
     }
   }, [topic, getColor]);
   return color;
@@ -48,9 +48,15 @@ export default function useTopicClassifier() {
 
   useEffect(() => {
     function updateClassifier() {
-      setClassifier({
-        classifier: getEmbeddingClassifier([...(embeddings?.values() as any)]),
-      });
+      try {
+        setClassifier({
+          classifier: getEmbeddingClassifier([
+            ...(embeddings?.values() as any),
+          ]),
+        });
+      } catch (e) {
+        // Didn't work
+      }
     }
     updateClassifier();
     embeddings?.observe(updateClassifier);
@@ -104,8 +110,6 @@ function centroidsToColorStore(centroids: number[][]) {
   return colorStore;
 }
 
-
-
 function colorSearchToColor(results: any[]) {
   const map = results.reduce((acc, n) => {
     acc[n[0].pageContent] = n[1] * 255;
@@ -124,7 +128,6 @@ function getEmbeddingClassifier(embeddings: number[]) {
     );
 }
 
-
 // TODO: Add N colors to a list and use Colors.js to interpolate (or get RGB values for each and just do weighted average based on matches)
 function euclideanDistance(vec1: number[], vec2: number[]) {
   return Math.sqrt(
@@ -135,7 +138,7 @@ function euclideanDistance(vec1: number[], vec2: number[]) {
 function calculateSumOfSquaredDistances(
   vectors: number[][],
   centroids: number[][],
-  assignments: number[],
+  assignments: number[]
 ) {
   let sum = 0;
   vectors.forEach((vec, i) => {
@@ -160,4 +163,3 @@ function findBestK(vectors: number[][], minK: number, maxK: number) {
   results.sort((a, b) => a.sumOfSquaredDistances - b.sumOfSquaredDistances);
   return results[0];
 }
-

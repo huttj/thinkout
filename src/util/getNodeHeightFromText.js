@@ -1,18 +1,16 @@
-const CHARACTERS_PER_LINE = 80;
-const MAX_LINE_COUNT = 24;
-const LINE_HEIGHT = 30;
-const PADDING = 8;
-const EXTRA_BUFFER = 20;
-
 const MINIMUM_HEIGHT = 80;
+const MAXIMUM_HEIGHT = 600;
 
 let textarea;
 
-export default function getHeight(text) {
+export default function getHeight(text, noMinHeight = false) {
   if (!textarea) {
     textarea = document.createElement("textarea");
     textarea.style.width = "600px";
     textarea.style.visibility = "hidden";
+    textarea.style.outline = "none";
+    textarea.style.overscrollBehavior = "contain";
+    textarea.style.resize = "none";
 
     "nodrag py-2 px-2 leading-6"
       .split(" ")
@@ -26,7 +24,11 @@ export default function getHeight(text) {
 
   // document.body.removeChild(textarea);
 
-  return Math.min(600, Math.max(MINIMUM_HEIGHT, height));
+  if (noMinHeight) {
+    return Math.min(MAXIMUM_HEIGHT, height);
+  }
+
+  return Math.min(MAXIMUM_HEIGHT, Math.max(MINIMUM_HEIGHT, height));
 }
 
 // export default function getHeight(text) {

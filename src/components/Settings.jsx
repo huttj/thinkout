@@ -65,12 +65,32 @@ export default function Settings(props) {
 
         <h1 className="text-lg mb-4">Settings</h1>
 
-        <div className="mb-5">
+        <div className="mb-4">
           <label className="block mb-1">Username</label>
           <input
             placeholder="Username"
             value={user.name}
             onChange={(e) => setUser({ ...user, name: e.target.value })}
+            className="border p-2 dark:bg-gray-900 rounded w-full"
+          />
+        </div>
+
+        <div className="mb-4">
+          <label className="block mb-1">Picture URL</label>
+          <input
+            placeholder="Picture URL"
+            value={user.pictureUrl}
+            onChange={(e) => setUser({ ...user, pictureUrl: e.target.value })}
+            className="border p-2 dark:bg-gray-900 rounded w-full"
+          />
+        </div>
+
+        <div className="mb-5">
+          <label className="block mb-1">Color</label>
+          <input
+            placeholder="Color"
+            value={user.color}
+            onChange={(e) => setUser({ ...user, color: e.target.value })}
             className="border p-2 dark:bg-gray-900 rounded w-full"
           />
         </div>

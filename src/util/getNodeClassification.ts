@@ -60,7 +60,7 @@ export default async function getNodeClassification(
       \`\`\`
 
       </CONTEXT>
-    `);
+    `, '', true);
 
   try {
     const { tone, topic, purpose, summary } = JSON.parse(result);

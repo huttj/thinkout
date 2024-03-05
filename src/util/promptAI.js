@@ -5,7 +5,7 @@ import axios from "axios";
  * @param {string} prompt
  * @returns
  */
-export default async function promptAI(prompt, systemMessage='') {
+export default async function promptAI(prompt, systemMessage='', json=false) {
   const model = localStorage.getItem("model");
 
   if (localStorage.getItem("ai") === "ollama") {
@@ -18,6 +18,7 @@ export default async function promptAI(prompt, systemMessage='') {
       method: "POST",
       data: {
         // model: "mixtral",
+        format: json ? 'json' : null,
         model,
         prompt,
         stream: false,

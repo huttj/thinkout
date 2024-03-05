@@ -9,6 +9,7 @@ import Graph from "@/components/Graph";
 import usePreventZoom from "@/hooks/usePreventZoom";
 import FirstTime from "@/components/FirstTime";
 import Settings from "@/components/Settings";
+import AgentList from "@/components/AgentList";
 
 export default function DocPage(props: any) {
   return (
@@ -75,6 +76,7 @@ function Loader(props: any) {
   return (
     <>
       <Graph />
+      <AgentList />
       <Settings />
       <FirstTime />
     </>

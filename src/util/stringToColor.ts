@@ -11,5 +11,11 @@ export default function stringToColor(str: string) {
     colour += value.toString(16).substring(-2);
   }
 
-  return colour.substring(0, 7);
+  let result = colour.substring(0, 7);
+
+  while (result.length < 7) {
+    result = result + '7';
+  }
+
+  return result;
 }

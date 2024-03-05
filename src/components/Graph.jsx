@@ -179,6 +179,7 @@ function Flow(props) {
       if (targetIsPane) {
         // we need to remove the wrapper bounds, in order to get the correct position
         const id = getId();
+
         const newNode = {
           id,
           position: screenToFlowPosition({
@@ -186,16 +187,40 @@ function Flow(props) {
             y: event.clientY,
           }),
           type: "textUpdater",
-          data: { text: "", author: user.name, authorId: user.id },
+          data: {
+            text: "",
+            authorId: user.id,
+            author: user.name,
+            color: user.color,
+            pictureUrl: user.pictureUrl,
+          },
           origin: [0.5, 0.0],
         };
 
         nodesMap.set(newNode.id, newNode);
         edgesMap.set(id, { id, source: connectingNodeId.current, target: id });
+
+        setTimeout(() => focusOnNode(newNode.id));
       }
     },
     [screenToFlowPosition, nodesMap, edgesMap]
   );
+
+  // TODO: Factor out of here and graph
+  function focusOnNode(id) {
+    setTimeout(() => {
+      const textEl = document.getElementById(`${id}_textarea`);
+      textEl.focus();
+      textEl.selectionStart = textEl.value.length;
+      textEl.selectionEnd = textEl.value.length;
+      fitView({
+        nodes: [{ id }],
+        padding: 0.005,
+        maxZoom: 1.25,
+        duration: 300,
+      });
+    }, 100);
+  }
 
   const onLayout = useCallback(
     (direction) => {
@@ -207,6 +232,19 @@ function Flow(props) {
       setNodes([...layoutedNodes]);
       setEdges([...layoutedEdges]);
       // setTimeout(() => fitView(), 1);
+
+      // // TODO: If one node is focused, focus on them
+      // Create hook to get selected nodes........?
+      const selected = nodes.filter((n) => n.selected);
+
+      setTimeout(() => {
+        fitView({
+          nodes: selected,
+          padding: 0.005,
+          maxZoom: 1.25,
+          duration: 300,
+        });
+      }, 1);
     },
     [nodes, edges, helpers]
   );
@@ -268,7 +306,14 @@ function Flow(props) {
           <div className="flex flex-row gap-2">
             <div
               className="dark:bg-gray-800 bg-gray-100 text-3xl p-1 px-3 pb-2 rounded leading-none cursor-pointer inline-block leading-0"
-              onClick={() => helpers.addNode()}
+              onClick={() =>
+                helpers.addNode("", {
+                  authorId: user.id,
+                  author: user.name,
+                  color: user.color,
+                  pictureUrl: user.pictureUrl,
+                })
+              }
             >
               +
             </div>
@@ -279,6 +324,22 @@ function Flow(props) {
             >
               Realign
             </button>
+
+            <div
+              className="dark:bg-gray-800 bg-gray-100 p-1 px-3 rounded leading-none cursor-pointer inline-block leading-0 flex items-center"
+              style={{
+                color: settings.showSummaries ? "white" : "black",
+                background: settings.showSummaries ? "black" : "white",
+              }}
+              onClick={() =>
+                setSettings({
+                  ...settings,
+                  showSummaries: !settings.showSummaries,
+                })
+              }
+            >
+              <p>Summaries</p>
+            </div>
 
             <div
               className="dark:bg-gray-800 bg-gray-100 text-3xl p-1 px-3 pb-2 rounded leading-none cursor-pointer inline-block leading-0"

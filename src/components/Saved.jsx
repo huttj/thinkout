@@ -9,6 +9,7 @@ import { v4 } from "uuid";
 import { useRecoilState, useRecoilValue } from "recoil";
 import HamburgerSvg from '@/icons/hamburger.svg';
 import Image from 'next/image';
+import { AgentListButton } from "./AgentList";
 
 
 function stringIds(entry) {
@@ -167,6 +168,7 @@ export default function Saved({ onLayout = () => {} }) {
               onLoad={loadTranscript}
             /> 
             <SettingsButton className="border p-1 px-3" />
+            <AgentListButton className="border p-1 px-3" />
           </div>
         </div>
 

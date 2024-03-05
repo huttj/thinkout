@@ -33,6 +33,9 @@ import deleteSvg from "@/icons/delete.svg";
 import { PurposeColors, ToneColors } from "@/util/tonesAndPurposes";
 import { useClassification } from "@/hooks/useTopicClassifier";
 
+import { agentsState } from "@/components/AgentList";
+import useLayout from "@/hooks/useLayout";
+
 export default function Wrapper(props) {
   const helpers = useNodeHelpers(props.id);
   const node = helpers.getNode(props.id);
@@ -50,16 +53,29 @@ function TextUpdaterNode({ id, data, selected }) {
   const user = useRecoilValue(userState);
   const helpers = useNodeHelpers();
   const focusMap = ydoc.getMap("focus");
-  const { colorNodes } = useRecoilValue(settingsState);
+  const { colorNodes, showSummaries } = useRecoilValue(settingsState);
   const [highlightedBy, setHighlightedBy] = useState(
     Object.keys(focusMap.get(id) || {})
   );
+
   const { fitView } = useReactFlow();
+  const layout = useLayout();
   // const zoomedOut = useStore(zoomSelector);
 
   const thisNode = helpers.getNode(id);
   const {
-    data: { text = "", loading, author, authorId, color, tone, topic, purpose },
+    data: {
+      text = "",
+      loading,
+      author,
+      authorId,
+      color,
+      tone,
+      topic,
+      purpose,
+      pictureUrl,
+      summary,
+    },
     width,
     height,
     targetPosition,
@@ -140,7 +156,7 @@ function TextUpdaterNode({ id, data, selected }) {
     helpers.updateNodeData(id, { text: evt.target.value });
   }
 
-  async function generate() {
+  async function generate(agent) {
     // const fullText = helpers.getTextToNode(id, true);
     const NODE_CONTEXT_LIMIT = 5; // TODO: Replace with text length filter
 
@@ -155,20 +171,26 @@ function TextUpdaterNode({ id, data, selected }) {
       }))
       .reverse();
 
+      
+
     const newNode = helpers.addNodeBelow(id, "Loading...", {
       loading: true,
-      author: `AI`,
+      isAI: true,
+      author: agent ? `${agent.name}` : "AI",
+      pictureUrl: agent?.pictureUrl,
       authorId: user.id,
     });
 
-    textAreaRef?.current?.blur?.();
-    addSelectedNodes([]);
-    focusOnNode(newNode.id);
+    // setTimeout(() => layout(), 1);
+
+    // textAreaRef?.current?.blur?.();
+    // addSelectedNodes([]);
+    // focusOnNode(newNode.id);
 
     try {
       const RETRY_LIMIT = 3;
       for (let i = 0; i < RETRY_LIMIT; i++) {
-        const rawResponse = await askAI(fullText);
+        const rawResponse = await askAI(fullText, agent);
 
         const response = rawResponse.split("; MESSAGE: ").pop();
 
@@ -183,7 +205,7 @@ function TextUpdaterNode({ id, data, selected }) {
           break;
         } else {
           helpers.updateNodeData(newNode.id, {
-            text: `Retrying ${i+1} of ${RETRY_LIMIT}...`,
+            text: `Retrying ${i + 1} of ${RETRY_LIMIT}...`,
             // text: response,
           });
         }
@@ -198,8 +220,15 @@ function TextUpdaterNode({ id, data, selected }) {
       setTimeout(async () => {
         helpers.updateNodeData(newNode.id, { summarizing: true });
         const [node, ...incomers] = helpers.getNodeAndIncomers(newNode.id);
-        const summary = await getNodeClassification(node, incomers);
-        helpers.updateNodeData(newNode.id, { ...summary, summarizing: false });
+        try {
+          const summary = await getNodeClassification(node, incomers);
+          helpers.updateNodeData(newNode.id, {
+            ...summary,
+            summarizing: false,
+          });
+        } catch (e) {
+          helpers.updateNodeData(newNode.id, { summarizing: false });
+        }
       }, 1);
 
       return newNode;
@@ -219,53 +248,6 @@ function TextUpdaterNode({ id, data, selected }) {
     return newNode;
   }
 
-  async function generateNew() {
-    const newNode = helpers.addNodeBelow(id, "", {
-      loading: true,
-      author: `AI (${user.name})`,
-      authorId: user.id,
-    });
-
-    try {
-      const response = await promptAI(
-        `
-        You're a helpful assistant. This is a conversation already in progress.
-
-      \`\`\`
-      ${JSON.stringify(
-        helpers.getNodeAndIncomers(id, 5).map((n) => ({
-          id: n.id,
-          author: n.data.author,
-          replyTo: n.replyTo,
-          text: n.data.text,
-        }))
-      )}
-      \`\`\`
-
-      Join in on the conversation. Please say something relevant to the conversation.
-
-      `,
-        localStorage.getItem("systemMessage") || null
-      );
-
-      helpers.updateNodeData(newNode.id, {
-        loading: false,
-        text: response.trim(),
-        // text: response,
-      });
-    } catch (e) {
-      if (e.message.includes("API Key")) {
-        toast(
-          "You have to add an API key to get AI completions.\n\nClick the + button and the ⚙️ to open the settings.",
-          {
-            duration: 10000,
-          }
-        );
-      } else {
-        toast.error(e.message);
-      }
-    }
-  }
 
   async function summarize() {
     if (!text) {
@@ -311,7 +293,10 @@ function TextUpdaterNode({ id, data, selected }) {
       textAreaRef?.current?.blur?.();
     } else if (e.metaKey && e.keyCode == 13) {
       textAreaRef?.current?.blur?.();
+
+      // TODO: Have it find authors from previous node(s) and auto-generate for each of them
       generate();
+      
     } else if (e.altKey && e.shiftKey && e.keyCode === 13) {
       // TODO: Should it do something different when a selection is made, vs when the caret is just sitting somewhere?
       // TODO: Also, need to handle auto-focus when adding a new node. It should typically follow the action. For
@@ -348,10 +333,17 @@ function TextUpdaterNode({ id, data, selected }) {
   }
 
   function getAuthorColor() {
+    if (thisNode.data.color) {
+      return thisNode.data.color;
+    }
+
     if (author.match(/^AI/)) {
       return "grey";
     }
-    return stringToColor(author);
+
+    const color = stringToColor(author || "gray");
+
+    return color;
   }
 
   function quote() {
@@ -365,6 +357,8 @@ function TextUpdaterNode({ id, data, selected }) {
       {
         authorId: user.id,
         author: user.name,
+        pictureUrl: user.pictureUrl,
+        color: user.color,
       }
     );
     focusOnNode(newNode.id);
@@ -374,6 +368,8 @@ function TextUpdaterNode({ id, data, selected }) {
     const newNode = helpers.addNodeBelow(id, "", {
       authorId: user.id,
       author: user.name,
+      color: user.color,
+      pictureUrl: user.pictureUrl,
     });
     focusOnNode(newNode.id);
   }
@@ -404,6 +400,7 @@ function TextUpdaterNode({ id, data, selected }) {
 
   // const highlightedByInitials = highlightedBy.map(name => name.split(/\s+/).map(c => c[0]).join(''));
 
+  // TODO: Factor this out somewhere???
   function focusOnNode(id) {
     setTimeout(() => {
       const textEl = document.getElementById(`${id}_textarea`);
@@ -426,13 +423,21 @@ function TextUpdaterNode({ id, data, selected }) {
   return (
     <div>
       <div
-        className="absolute top-0 left-0 translate-y-[-100%] rounded-full inline-block p-1 px-4"
+        className={`absolute top-0 left-0 translate-y-[-100%] inline-block flex flex-row gap-2 items-center rounded-full inline-block p-1 px-4 ${getTextColor(
+          getAuthorColor()
+        )}`}
         style={{
           background: getAuthorColor(),
-          color: getTextColor(getAuthorColor()),
+          paddingLeft: pictureUrl ? 4 : "",
         }}
       >
-        {author}
+        {pictureUrl && (
+          <ProfileIcon src={pictureUrl} className="mr-0 align-bottom" />
+        )}
+        <span>
+          {author}
+          {(thisNode?.data?.isAI || author === "AI") && <span> (AI)</span>}
+        </span>
       </div>
 
       <Classification
@@ -448,14 +453,7 @@ function TextUpdaterNode({ id, data, selected }) {
         text={text}
       />
 
-      <div
-        className={`mt-3 h-full w-full flex flex-col gap-2 rounded relative border border-1`}
-        style={{
-          // border: selected ? "2px solid gray" : "2px solid transparent",
-          height: getNodeHeightFromText(text),
-          width: 600,
-        }}
-      >
+      <div className="mt-3 h-full w-full flex flex-col gap-2 rounded relative border border-1">
         <Handle type="target" position={targetPosition || "top"} />
         <div className="flex-1 flex flex-col">
           <textarea
@@ -466,15 +464,22 @@ function TextUpdaterNode({ id, data, selected }) {
               overscrollBehavior: "contain",
               resize: "none",
               background: nodeColor,
-              color: colorNodes ? getTextColor(nodeColor) : "",
+              height:
+                getNodeHeightFromText(
+                  showSummaries ? summary : text,
+                  showSummaries
+                ) + 2,
+              width: 600,
             }}
             onKeyDown={isAuthor ? onKeyDown : () => {}}
             name="text"
             onChange={isAuthor ? onChange : () => {}}
-            className="nodrag w-full h-full py-2 px-2 leading-6 rounded flex-1 dark:bg-gray-800 text-black dark:text-white"
-            value={text}
+            className={`nodrag w-full h-full py-2 px-2 leading-6 rounded dark:bg-gray-800 text-black dark:text-white ${getTextColor(
+              nodeColor
+            )}`}
+            value={showSummaries ? summary : text}
             placeholder={loading ? text || "Loading..." : "Type here"}
-            disabled={loading}
+            disabled={loading || showSummaries}
           />
         </div>
         <Handle type="source" position={sourcePosition || "bottom"} />
@@ -484,7 +489,7 @@ function TextUpdaterNode({ id, data, selected }) {
               src={deleteSvg}
               height={24}
               width={24}
-              className="cursor-pointer"
+              className="cursor-pointer hover:opacity-80 active:opacity-90"
               onClick={() => helpers.deleteNode(id)}
             />
           </div>
@@ -493,30 +498,28 @@ function TextUpdaterNode({ id, data, selected }) {
 
       {selected && (
         <div className="flex-0 flex flex-row justify-between mt-3">
-          <button
-            className="bg-gray-600 text-white px-2 py-1 border rounded disabled:opacity-50 hover:bg-gray-500"
-            disabled={!text}
-            onClick={generate}
-          >
-            Ask AI
-          </button>
+          <AgentButtons text={text} generate={generate} hide={showSummaries} />
 
-          <div className="flex flex-row gap-2">
-            {selection && (
+          {!showSummaries && (
+            <div className="flex flex-row gap-2 self-start">
+              {selection && (
+                <button
+                  className="bg-white border border-gray-800 text-gray-800 hover:bg-gray-100 dark:bg-gray-800 dark:border-white dark:text-white dark:hover:bg-gray-600 px-2 py-1 rounded"
+                  onClick={quote}
+                >
+                  Quote
+                </button>
+              )}
+
+              {/* TODO: Make this a standard button class */}
               <button
-                className="bg-gray-600 text-white px-2 py-1 border rounded hover:bg-gray-500"
-                onClick={quote}
+                className="bg-white border border-gray-800 text-gray-800 hover:bg-gray-100 dark:bg-gray-800 dark:border-white dark:text-white dark:hover:bg-gray-600 px-2 py-1 rounded"
+                onClick={reply}
               >
-                Quote
+                Reply
               </button>
-            )}
-            <button
-              className="bg-gray-600 text-white px-2 py-1 border rounded hover:bg-gray-500"
-              onClick={reply}
-            >
-              Reply
-            </button>
-          </div>
+            </div>
+          )}
 
           {/* <button
               className="bg-transparent px-2 py-1 border rounded disabled:opacity-50"
@@ -527,6 +530,58 @@ function TextUpdaterNode({ id, data, selected }) {
             </button> */}
         </div>
       )}
+    </div>
+  );
+}
+
+function ProfileIcon(props) {
+  if (!props.src) {
+    return null;
+  }
+  return (
+    <div
+      className={`inline-block mr-2 ${props.className || ""}`}
+      style={{
+        backgroundImage: `url(${props.src})`,
+        backgroundSize: "cover",
+        backgroundPosition: "center center",
+        height: props.size || 24,
+        width: props.size || 24,
+        borderRadius: 10000,
+      }}
+    />
+  );
+}
+
+function AgentButtons({ generate, text, hide }) {
+  let agents = useRecoilValue(agentsState);
+
+  if (hide) {
+    return null;
+  }
+
+  if (agents.length === 0) {
+    agents = [
+      {
+        name: "🤖",
+        color: "gray",
+        pictureUrl: "",
+        type: "default",
+      },
+    ];
+  }
+
+  return (
+    <div className="flex flex-row gap-2 flex-wrap max-w-[400px]">
+      {agents.map((agent) => (
+        <button
+          className="bg-white border border-gray-800 text-gray-800 hover:bg-gray-100 dark:bg-gray-800 dark:border-white dark:text-white dark:hover:bg-gray-600 px-2 py-1 rounded  flex flex-row items-center"
+          disabled={!text}
+          onClick={() => generate(agent)}
+        >
+          <ProfileIcon src={agent.pictureUrl} /> {agent.name}
+        </button>
+      ))}
     </div>
   );
 }
@@ -590,9 +645,10 @@ function Classification(props) {
   //   }
   // }
   const classificationColor = useClassification(props.topic);
-  const topicColor = (props.topic && !props.summarizing)
-    ? lowerColorfulness(classificationColor)
-    : classificationColor;
+  const topicColor =
+    props.topic && !props.summarizing
+      ? lowerColorfulness(classificationColor)
+      : classificationColor;
 
   if (props.loading) {
     return null;
@@ -623,7 +679,7 @@ function Classification(props) {
             src={reloadSvg}
             height={24}
             width={24}
-            className="text-gray-600 hover:text-gray-500  opacity-50 hover:opacity-40 cursor-pointer"
+            className="text-gray-600 hover:text-gray-500 opacity-50 hover:opacity-30 active:opacity-40 cursor-pointer"
           />
         </div>
       )}
@@ -794,8 +850,15 @@ function useSelectionState(elementRef) {
 }
 
 function getTextColor(color) {
-  const c = new Color(color || "#666666");
-  return c.luminance > 0.5 ? "black" : "white";
+  try {
+    const c = new Color(color);
+    return c.luminance > 0.5
+      ? "dark:text-black text-black"
+      : "dark:text-white text-white";
+  } catch (e) {
+    // console.log(e);
+    return "text-black dark:text-white";
+  }
 }
 
 function getTextColorFromHex(hex) {

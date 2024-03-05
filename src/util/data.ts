@@ -5,7 +5,7 @@ import { WebrtcProvider } from "y-webrtc";
 import generateRandomAnimal from "random-animal-name";
 import stringToColor from "./stringToColor";
 import { OpenAIEmbeddings } from "@langchain/openai";
-
+import makeLocalAtom from "./makeLocalAtom";
 
 
 export const docState = atom<{
@@ -42,6 +42,8 @@ export const settingsState = makeLocalAtom("settings", {
   colorNodes: false,
 });
 
+
+
 export const savedGraphs = makeLocalAtom('savedGraphs', []);
 
 export const searchState = atom({
@@ -75,25 +77,3 @@ export const searchResultsState = atom({
   key: 'searchResults',
   default: {},
 });
-
-function getLocalStorage(key: string) {
-  try {
-    return JSON.parse(localStorage.getItem(key) || "null");
-  } catch (e) {
-    return null;
-  }
-}
-
-function makeLocalAtom(key: string, defaults?: any) {
-  return atom({
-    key,
-    default: getLocalStorage(key) || defaults,
-    effects: [
-      ({ onSet }) => {
-        onSet((newValue) => {
-          localStorage.setItem(key, JSON.stringify(newValue));
-        });
-      },
-    ],
-  });
-}
