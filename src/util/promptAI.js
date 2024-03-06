@@ -7,8 +7,9 @@ import axios from "axios";
  */
 export default async function promptAI(prompt, systemMessage='', json=false) {
   const model = localStorage.getItem("model");
+  const type = localStorage.getItem("ai");
 
-  if (localStorage.getItem("ai") === "ollama") {
+  if (type === "ollama") {
     if (!model) {
       throw Error("Model not specified");
     }
@@ -57,6 +58,7 @@ export default async function promptAI(prompt, systemMessage='', json=false) {
     url: "/ai",
     method: "POST",
     data: {
+      type,
       model: model || "gpt-3.5-turbo",
       key: localStorage.getItem("key"),
       messages: messages.concat({

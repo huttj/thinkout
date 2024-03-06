@@ -81,6 +81,7 @@ export default async function askAI(fullText, agent) {
     url: "/ai",
     method: "POST",
     data: {
+      type,
       model: model || 'gpt-3.5-turbo',
       key,
       messages: messages.concat(

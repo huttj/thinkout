@@ -104,6 +104,15 @@ export default function Settings(props) {
           />{" "}
           OpenAI{" "}
         </label>
+
+        <label>
+          <input
+            type="radio"
+            checked={ai === "groq"}
+            onChange={(e) => e.target.checked && setAi("groq")}
+          />{" "}
+          Groq
+        </label>
         {/* <label>
             <input type="radio" disabled /> Claude{" "}
           </label> */}

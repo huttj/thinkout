@@ -140,6 +140,8 @@ function getCurrentAISetting() {
 
     case "openai":
       return "OpenAI";
+    case "groq":
+      return "Groq";
     default:
       return "Not set up";
   }
@@ -171,6 +173,12 @@ function EditAgent(props: any) {
           checked={agent.type === "openai"}
           className="mr-4"
           onChange={() => setAgent({ ...agent, type: "openai" })}
+          />
+        <Checkbox
+          label="Groq"
+          className="mr-4"
+          checked={agent.type === "groq"}
+          onChange={() => setAgent({ ...agent, type: "groq" })}
         />
         <Checkbox
           label="Ollama"

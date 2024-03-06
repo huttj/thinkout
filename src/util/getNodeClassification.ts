@@ -63,8 +63,11 @@ export default async function getNodeClassification(
     `, '', true);
 
   try {
-    const { tone, topic, purpose, summary } = JSON.parse(result);
+    const { tone, topic, purpose, summary } = JSON.parse(extractJson(result));
     console.log({ tone, topic, purpose, summary });
+
+
+
     return {
       tone,
       topic,
@@ -79,4 +82,16 @@ export default async function getNodeClassification(
 
 function removeQuotes(text: string) {
   return text.split('\n').filter((line: string) => line.trim()[0] !== '>').join('\n');
+}
+
+function extractJson(str: string) {
+  const firstBraceIndex = str.indexOf('{');
+  const lastBraceIndex = str.lastIndexOf('}');
+
+  console.log({
+    str,
+    'str.slice(firstBraceIndex, (lastBraceIndex + 1) || str.length);': str.slice(firstBraceIndex, (lastBraceIndex + 1) || str.length),
+  })
+
+  return str.slice(firstBraceIndex, (lastBraceIndex + 1) || str.length);
 }
