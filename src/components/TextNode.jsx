@@ -26,7 +26,7 @@ import Color from "colorjs.io";
 import { XYZ_D65, OKLCH } from "colorjs.io/fn";
 
 import getNodeHeightFromText from "@/util/getNodeHeightFromText";
-import getNodeClassification from "@/util/getNodeClassification";
+import getNodeClassification from "@/util/getNodeDetails";
 import Image from "next/image";
 import reloadSvg from "@/icons/reload.svg";
 import deleteSvg from "@/icons/delete.svg";
@@ -35,6 +35,8 @@ import { useClassification } from "@/hooks/useTopicClassifier";
 
 import { agentsState } from "@/components/AgentList";
 import useLayout from "@/hooks/useLayout";
+
+import TextEditor from "./TextEditor";
 
 export default function Wrapper(props) {
   const helpers = useNodeHelpers(props.id);
@@ -53,7 +55,8 @@ function TextUpdaterNode({ id, data, selected }) {
   const user = useRecoilValue(userState);
   const helpers = useNodeHelpers();
   const focusMap = ydoc.getMap("focus");
-  const { colorNodes, showSummaries } = useRecoilValue(settingsState);
+  const { colorNodes, showSummaries, showArguments } =
+    useRecoilValue(settingsState);
   const [highlightedBy, setHighlightedBy] = useState(
     Object.keys(focusMap.get(id) || {})
   );
@@ -73,6 +76,7 @@ function TextUpdaterNode({ id, data, selected }) {
       tone,
       topic,
       purpose,
+      argument,
       pictureUrl,
       summary,
     },
@@ -163,15 +167,34 @@ function TextUpdaterNode({ id, data, selected }) {
     const fullText = helpers
       .getNodeAndIncomers(id, 10)
       .filter((n, i) => i < NODE_CONTEXT_LIMIT || n.data.summary)
-      .map((n, i) => ({
-        author: n.data.author,
-        content: `ID: ${n.id}; REPLY-TO: ${n.replyTo.join(", ")}; ${
-          i > NODE_CONTEXT_LIMIT ? "SUMMARY" : "MESSAGE"
-        }: ${i > NODE_CONTEXT_LIMIT ? n.data.summary : n.data.text}`,
-      }))
+      .map(getNodeData)
       .reverse();
 
-      
+    function getNodeData(n, i) {
+      let content = {
+        id: n.id,
+        author: n.data.author,
+        replyTo: n.replyTo,
+      };
+
+      if (i > NODE_CONTEXT_LIMIT) {
+        // content = n.data.argument ? `ARGUMENT: ${n.data.argument}` : `SUMMARY: ${n.data.summary}`;
+        if (n.data.argument) {
+          content.argument = n.data.argument;
+        } else if (n.data.summary) {
+          content.summary = n.data.summary;
+        }
+      } else {
+        // content = `MESSAGE: ${n.data.text}`;
+        content.message = n.data.text;
+      }
+
+      return {
+        author: n.data.author,
+        content: JSON.stringify(content),
+        // content: `ID: ${n.id}; AUTHOR: ${n.data.author}; REPLY-TO: ${n.replyTo.join(", ")}; ${content}`,
+      };
+    }
 
     const newNode = helpers.addNodeBelow(id, "Loading...", {
       loading: true,
@@ -189,26 +212,42 @@ function TextUpdaterNode({ id, data, selected }) {
 
     try {
       const RETRY_LIMIT = 3;
-      for (let i = 0; i < RETRY_LIMIT; i++) {
+      for (let i = 0; i <= RETRY_LIMIT; i++) {
         const rawResponse = await askAI(fullText, agent);
 
-        const response = rawResponse.split("; MESSAGE: ").pop();
+        const response = extractMessage(rawResponse);
+
+        function extractMessage(rawResponse) {
+          if (rawResponse.includes("; MESSAGE:")) {
+            return rawResponse
+              .split(/; MESSAGE\:[\n\s]/)
+              .pop()
+              .trim();
+          }
+
+          const match = rawResponse.match(/\[ID[^\]]+\]/);
+          if (match) {
+            return rawResponse.slice(match.index + match[0].length).trim();
+          }
+
+          return rawResponse.trim();
+        }
 
         // It replied with SUMMARY: once--
         // ID: 7ef409c7-7a79-4e34-a9bd-908847fcb167; REPLY-TO: 91061296-ab09-42d7-bc7f-d2c9596c35cf; SUMMARY: Acknowledgment of the complexities of navigating communication styles in real life situations similar to gameplay scenarios
-        if (!response.includes("REPLY-TO:")) {
-          helpers.updateNodeData(newNode.id, {
-            loading: false,
-            text: response.trim(),
-            // text: response,
-          });
-          break;
-        } else {
-          helpers.updateNodeData(newNode.id, {
-            text: `Retrying ${i + 1} of ${RETRY_LIMIT}...`,
-            // text: response,
-          });
-        }
+        // if (!response.includes("REPLY-TO:")) {
+        helpers.updateNodeData(newNode.id, {
+          loading: false,
+          text: response.trim(),
+          // text: response,
+        });
+        break;
+        // } else {
+        //   helpers.updateNodeData(newNode.id, {
+        //     text: `Retrying ${i + 1} of ${RETRY_LIMIT}...`,
+        //     // text: response,
+        //   });
+        // }
         if (i === RETRY_LIMIT) {
           helpers.updateNodeData(newNode.id, {
             text: `ERROR! Response failed. Here's what we got for the last request: \n\n${rawResponse}`,
@@ -241,13 +280,12 @@ function TextUpdaterNode({ id, data, selected }) {
           }
         );
       } else {
-        toast.error(e.message);
+        toast.error(e?.response?.data?.error || e.message);
       }
     }
 
     return newNode;
   }
-
 
   async function summarize() {
     if (!text) {
@@ -275,9 +313,9 @@ function TextUpdaterNode({ id, data, selected }) {
         // TODO: Trigger coloring based on topic
       }
     } catch (e) {
-      if (summarizing === text) {
-        setSummarizing(null);
-      }
+      // if (summarizing === text) {
+      // }
+      setSummarizing(null);
       toast.error(e.message);
     }
   }
@@ -296,7 +334,6 @@ function TextUpdaterNode({ id, data, selected }) {
 
       // TODO: Have it find authors from previous node(s) and auto-generate for each of them
       generate();
-      
     } else if (e.altKey && e.shiftKey && e.keyCode === 13) {
       // TODO: Should it do something different when a selection is made, vs when the caret is just sitting somewhere?
       // TODO: Also, need to handle auto-focus when adding a new node. It should typically follow the action. For
@@ -420,6 +457,27 @@ function TextUpdaterNode({ id, data, selected }) {
   const nodeColor =
     colorNodes && topic ? lowerColorfulness(classificationColor, 1.2) : "";
 
+  function getText() {
+    if (showSummaries) {
+      const n = thisNode;
+      return `
+        SUMMARY: ${n.data.summary}
+
+        FACTS:
+         - ${(n.data.facts || ["none"]).join("\n- ")}
+
+        OPINIONS:
+        - ${(n.data.opinions || ["none"]).join("\n- ")}
+        
+        ARGUMENTS:
+         - ${(n.data.aruments || ["none"]).join("\n- ")}
+      `
+        .trim()
+        .replace(/[ \t]{2,}/g, "");
+    }
+    return text;
+  }
+
   return (
     <div>
       <div
@@ -448,6 +506,7 @@ function TextUpdaterNode({ id, data, selected }) {
         tone={tone}
         topic={topic}
         purpose={purpose}
+        argument={argument}
         selected={selected}
         reload={summarize}
         text={text}
@@ -456,7 +515,7 @@ function TextUpdaterNode({ id, data, selected }) {
       <div className="mt-3 h-full w-full flex flex-col gap-2 rounded relative border border-1">
         <Handle type="target" position={targetPosition || "top"} />
         <div className="flex-1 flex flex-col">
-          <textarea
+          {/* <TextEditor
             id={`${id}_textarea`}
             ref={textAreaRef}
             style={{
@@ -464,11 +523,7 @@ function TextUpdaterNode({ id, data, selected }) {
               overscrollBehavior: "contain",
               resize: "none",
               background: nodeColor,
-              height:
-                getNodeHeightFromText(
-                  showSummaries ? summary : text,
-                  showSummaries
-                ) + 2,
+              height: getNodeHeightFromText(getText(), showSummaries) + 2,
               width: 600,
             }}
             onKeyDown={isAuthor ? onKeyDown : () => {}}
@@ -477,7 +532,28 @@ function TextUpdaterNode({ id, data, selected }) {
             className={`nodrag w-full h-full py-2 px-2 leading-6 rounded dark:bg-gray-800 text-black dark:text-white ${getTextColor(
               nodeColor
             )}`}
-            value={showSummaries ? summary : text}
+            value={getText()}
+            placeholder={loading ? text || "Loading..." : "Type here"}
+            disabled={loading || showSummaries}
+          /> */}
+          <textarea
+            id={`${id}_textarea`}
+            ref={textAreaRef}
+            style={{
+              outline: "none",
+              overscrollBehavior: "contain",
+              resize: "none",
+              background: nodeColor,
+              height: getNodeHeightFromText(getText(), showSummaries) + 2,
+              width: 600,
+            }}
+            onKeyDown={isAuthor ? onKeyDown : () => {}}
+            name="text"
+            onChange={isAuthor ? onChange : () => {}}
+            className={`nodrag w-full h-full py-2 px-2 leading-6 rounded dark:bg-gray-800 text-black dark:text-white ${getTextColor(
+              nodeColor
+            )}`}
+            value={getText()}
             placeholder={loading ? text || "Loading..." : "Type here"}
             disabled={loading || showSummaries}
           />

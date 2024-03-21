@@ -1,6 +1,5 @@
 import promptAI from "./promptAI";
-import { Tones, Purposes } from '@/util/tonesAndPurposes';
-
+import { Tones, Purposes } from "@/util/tonesAndPurposes";
 
 type TextNode = {
   id: string;
@@ -20,15 +19,21 @@ export default async function getNodeClassification(
   tone: string;
   purpose: string;
   summary: string;
+  argument: string;
 }> {
-  const result = await promptAI(`
+  const result = await promptAI(
+    `
       Can you analyze this message and give me the following as JSON:
+
+      e.g.,
       
       {
+        "topic": "1-3 word phrase describing the topic under discussion (use CONTEXT)",
+        "tone": "1 word description of the tone, such as: ${Tones.join(", ")}",
+        "purpose": "1 word, such as: ${Purposes.join(", ")}",
         "summary": "1 sentence summary of the core idea(s)",
-        "tone": "1 word description of the tone, such as: ${Tones.join(', ')}",
-        "purpose": "1 word, such as: ${Purposes.join(', ')}",
-        "topic": "1-3 word phrase describing the topic under discussion (use CONTEXT)"
+        "argument": "whatever the text is arguing (may be null)",
+
       }
 
       NOTE: Avoid repetition between the tone and purpose (e.g., "reflective reflection", "inquisitive inquiry", "conflicted conflict", etc).
@@ -60,38 +65,36 @@ export default async function getNodeClassification(
       \`\`\`
 
       </CONTEXT>
-    `, '', true);
+    `,
+    "",
+    true
+  );
 
   try {
-    const { tone, topic, purpose, summary } = JSON.parse(extractJson(result));
-    console.log({ tone, topic, purpose, summary });
-
-
-
-    return {
-      tone,
-      topic,
-      purpose,
-      summary,
-    };
+    const classification = JSON.parse(extractJson(result));
+    console.log(classification);
+    return classification;
   } catch (e: any) {
     throw new Error(`Failed to summarize: ${e.message}`);
   }
 }
 
-
 function removeQuotes(text: string) {
-  return text.split('\n').filter((line: string) => line.trim()[0] !== '>').join('\n');
+  return text
+    .split("\n")
+    .filter((line: string) => line.trim()[0] !== ">")
+    .join("\n");
 }
 
 function extractJson(str: string) {
-  const firstBraceIndex = str.indexOf('{');
-  const lastBraceIndex = str.lastIndexOf('}');
+  const firstBraceIndex = str.indexOf("{");
+  const lastBraceIndex = str.lastIndexOf("}");
 
   console.log({
     str,
-    'str.slice(firstBraceIndex, (lastBraceIndex + 1) || str.length);': str.slice(firstBraceIndex, (lastBraceIndex + 1) || str.length),
-  })
+    "str.slice(firstBraceIndex, (lastBraceIndex + 1) || str.length);":
+      str.slice(firstBraceIndex, lastBraceIndex + 1 || str.length),
+  });
 
-  return str.slice(firstBraceIndex, (lastBraceIndex + 1) || str.length);
+  return str.slice(firstBraceIndex, lastBraceIndex + 1 || str.length);
 }
