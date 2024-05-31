@@ -616,7 +616,7 @@ function ProfileIcon(props) {
   }
   return (
     <div
-      className={`inline-block mr-2 ${props.className || ""}`}
+      className={`inline-block ${props.className || ""}`}
       style={{
         backgroundImage: `url(${props.src})`,
         backgroundSize: "cover",
@@ -655,7 +655,7 @@ function AgentButtons({ generate, text, hide }) {
           disabled={!text}
           onClick={() => generate(agent)}
         >
-          <ProfileIcon src={agent.pictureUrl} /> {agent.name}
+          <ProfileIcon src={agent.pictureUrl} className="mr-2" /> {agent.name}
         </button>
       ))}
     </div>

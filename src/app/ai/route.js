@@ -5,6 +5,8 @@ export async function POST(req, res) {
   const body = await req.json();
   try {
     if (body.type === "groq") {
+
+      console.log('groq request');
       const result = await axios({
         url: "https://api.groq.com/openai/v1/chat/completions",
         method: "POST",
@@ -18,6 +20,8 @@ export async function POST(req, res) {
           messages: body.messages,
         },
       });
+
+      console.log(result);
 
       return Response.json(result.data.choices[0].message.content);
     }
